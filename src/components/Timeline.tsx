@@ -38,12 +38,16 @@ function formatTime(seconds: number): string {
 }
 
 function formatTimestamp(iso: string, offsetSec: number): string {
-  const d = new Date(iso);
-  d.setSeconds(d.getSeconds() + offsetSec);
+  // iso 格式 "2026-03-23T13:01:18"，視為本地時間（加上本地時區偏移避免 UTC 解析）
+  const d = new Date(iso.includes("+") || iso.includes("Z") ? iso : iso + "+08:00");
+  d.setSeconds(d.getSeconds() + Math.floor(offsetSec));
+  const yy = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
   const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
+  return `${yy}-${mo}-${dd} ${hh}:${mm}:${ss}`;
 }
 
 const EVENT_COLORS: Record<string, string> = {
