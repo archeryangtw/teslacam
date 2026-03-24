@@ -242,6 +242,9 @@ const VideoGrid = forwardRef<VideoGridHandle, VideoGridProps>(function VideoGrid
     });
   }, [currentTime]);
 
+  // Debug: 追蹤 render 狀態
+  console.log("[VideoGrid] clips:", clips.length, "segments:", cameraSegments.size, "segIndexes:", Object.fromEntries(segmentIndexes));
+
   if (clips.length === 0) {
     return (
       <div className="video-grid-empty">
@@ -251,6 +254,7 @@ const VideoGrid = forwardRef<VideoGridHandle, VideoGridProps>(function VideoGrid
   }
 
   const availableCameras = GRID_ORDER.filter((cam) => cameraSegments.has(cam));
+  console.log("[VideoGrid] available cameras:", availableCameras.length, availableCameras);
 
   return (
     <div className={`video-grid grid-${availableCameras.length}`}>

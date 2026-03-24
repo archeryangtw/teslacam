@@ -28,6 +28,7 @@ export default function MapPanel({
   telemetryTrack,
   currentTime,
   visible,
+  onToggle,
   onSelectEvent,
 }: MapPanelProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
