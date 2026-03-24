@@ -1,5 +1,6 @@
 mod commands;
 mod db;
+mod event_detection;
 mod scanner;
 mod sei;
 
@@ -37,6 +38,7 @@ pub fn run() {
             commands::delete_event,
             commands::backup_event,
             commands::parse_telemetry,
+            commands::detect_events,
             commands::export_surround_video,
         ])
         .run(tauri::generate_context!())

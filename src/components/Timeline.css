@@ -192,3 +192,19 @@
 .timeline-mark-out::after {
   right: 0;
 }
+
+/* 偵測事件標記 */
+.timeline-event-dot {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 2;
+  transition: transform 0.1s;
+}
+
+.timeline-event-dot:hover {
+  transform: translate(-50%, -50%) scale(2);
+  z-index: 3;
+}

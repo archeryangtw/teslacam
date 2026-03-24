@@ -1,4 +1,5 @@
 use crate::db::Database;
+use crate::event_detection;
 use crate::scanner;
 use crate::sei;
 use chrono::TimeZone;
@@ -193,6 +194,13 @@ pub fn backup_event(event_id: i64, target_dir: String, db: State<'_, Database>) 
 pub fn parse_telemetry(file_path: String) -> Result<Vec<sei::TelemetryFrame>, String> {
     let raw_frames = sei::parse_sei_from_file(&file_path)?;
     Ok(sei::downsample_by_time(&raw_frames, 0.15))
+}
+
+/// 偵測影片中的駕駛事件（急煞車、急轉彎、倒車等）
+#[tauri::command]
+pub fn detect_events(file_path: String) -> Result<Vec<event_detection::DetectedEvent>, String> {
+    let raw_frames = sei::parse_sei_from_file(&file_path)?;
+    Ok(event_detection::detect_events(&raw_frames))
 }
 
 /// 單段匯出：把一個 segment 的六鏡頭合併成環景影片

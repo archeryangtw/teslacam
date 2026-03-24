@@ -1,6 +1,14 @@
 import type { TeslaCamEvent } from "../types/events";
 import "./Timeline.css";
 
+export interface DetectedEvent {
+  event_type: string;
+  time_sec: number;
+  duration_sec: number;
+  description: string;
+  severity: number;
+}
+
 interface TimelineProps {
   event: TeslaCamEvent | null;
   currentTime: number;
@@ -9,6 +17,7 @@ interface TimelineProps {
   playbackRate: number;
   markIn: number | null;
   markOut: number | null;
+  detectedEvents?: DetectedEvent[];
   onSeek: (time: number) => void;
   onPlayPause: () => void;
   onPlaybackRateChange: (rate: number) => void;
@@ -37,6 +46,16 @@ function formatTimestamp(iso: string, offsetSec: number): string {
   return `${hh}:${mm}:${ss}`;
 }
 
+const EVENT_COLORS: Record<string, string> = {
+  HardBrake: "#e94560",
+  HardAccel: "#f0c040",
+  SharpTurn: "#ff8c00",
+  ReverseGear: "#9b59b6",
+  AutopilotChange: "#4ecdc4",
+  Stop: "#888",
+  SpeedExceed: "#e94560",
+};
+
 export default function Timeline({
   event,
   currentTime,
@@ -45,6 +64,7 @@ export default function Timeline({
   playbackRate,
   markIn,
   markOut,
+  detectedEvents,
   onSeek,
   onPlayPause,
   onPlaybackRateChange,
@@ -161,6 +181,21 @@ export default function Timeline({
               style={{ left: `${(markOut / duration) * 100}%` }}
             />
           )}
+          {/* 偵測到的事件標記 */}
+          {detectedEvents && duration > 0 && detectedEvents.map((de, idx) => (
+            <div
+              key={idx}
+              className="timeline-event-dot"
+              style={{
+                left: `${(de.time_sec / duration) * 100}%`,
+                backgroundColor: EVENT_COLORS[de.event_type] ?? "#888",
+                width: de.severity >= 3 ? "6px" : de.severity >= 2 ? "4px" : "3px",
+                height: de.severity >= 3 ? "6px" : de.severity >= 2 ? "4px" : "3px",
+              }}
+              title={de.description}
+              onClick={(e) => { e.stopPropagation(); onSeek(de.time_sec); }}
+            />
+          ))}
           <div className="timeline-progress" style={{ width: `${progress}%` }} />
           <div className="timeline-playhead" style={{ left: `${progress}%` }} />
         </div>

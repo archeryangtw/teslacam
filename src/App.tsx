@@ -36,16 +36,17 @@ function App() {
   const [markOut, setMarkOut] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const [telemetryTrack, setTelemetryTrack] = useState<{ time_sec: number; lat: number; lon: number; speed_kmh: number; heading: number }[]>([]);
+  const [detectedEvents, setDetectedEvents] = useState<{ event_type: string; time_sec: number; duration_sec: number; description: string; severity: number }[]>([]);
 
   const videoGridRef = useRef<VideoGridHandle>(null);
 
   // 當選中事件改變時，載入 GPS 軌跡
   useEffect(() => {
-    if (!selectedEvent) { setTelemetryTrack([]); return; }
+    if (!selectedEvent) { setTelemetryTrack([]); setDetectedEvents([]); return; }
     const frontClips = selectedEvent.clips
       .filter((c) => c.camera === "front")
       .sort((a, b) => a.segmentIndex - b.segmentIndex);
-    if (frontClips.length === 0) { setTelemetryTrack([]); return; }
+    if (frontClips.length === 0) { setTelemetryTrack([]); setDetectedEvents([]); return; }
 
     let cancelled = false;
     (async () => {
@@ -65,7 +66,20 @@ function App() {
         } catch { /* ignore */ }
         timeOffset += clip.durationSec;
       }
-      if (!cancelled) setTelemetryTrack(allPoints);
+      if (!cancelled) {
+        setTelemetryTrack(allPoints);
+        // 偵測駕駛事件
+        try {
+          const allDetected: { event_type: string; time_sec: number; duration_sec: number; description: string; severity: number }[] = [];
+          let tOff = 0;
+          for (const clip of frontClips) {
+            const events = await invoke<typeof allDetected>("detect_events", { filePath: clip.filePath });
+            for (const e of events) allDetected.push({ ...e, time_sec: e.time_sec + tOff });
+            tOff += clip.durationSec;
+          }
+          setDetectedEvents(allDetected);
+        } catch { setDetectedEvents([]); }
+      }
     })();
     return () => { cancelled = true; };
   }, [selectedEvent]);
@@ -252,6 +266,7 @@ function App() {
             playbackRate={playbackRate}
             markIn={markIn}
             markOut={markOut}
+            detectedEvents={detectedEvents}
             onSeek={setCurrentTime}
             onPlayPause={() => setIsPlaying(!isPlaying)}
             onPlaybackRateChange={setPlaybackRate}
