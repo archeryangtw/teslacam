@@ -117,6 +117,24 @@ pub fn read_mp4_duration_pub(path: &str) -> Option<f64> {
     read_mp4_duration(std::path::Path::new(path))
 }
 
+/// 計算兩個時間戳之間的秒數差
+fn timestamp_diff_seconds(ts_a: &str, ts_b: &str) -> f64 {
+    // 格式 "2026-03-22_20-34-32"
+    let parse = |ts: &str| -> Option<i64> {
+        let parts: Vec<&str> = ts.split('_').collect();
+        if parts.len() != 2 { return None; }
+        let date: Vec<i64> = parts[0].split('-').filter_map(|s| s.parse().ok()).collect();
+        let time: Vec<i64> = parts[1].split('-').filter_map(|s| s.parse().ok()).collect();
+        if date.len() != 3 || time.len() != 3 { return None; }
+        // 簡易轉換為秒數（足夠比較同天的差距）
+        Some(date[2] * 86400 + time[0] * 3600 + time[1] * 60 + time[2])
+    };
+    match (parse(ts_a), parse(ts_b)) {
+        (Some(a), Some(b)) => (a - b).abs() as f64,
+        _ => 999.0, // 無法解析就視為不連續
+    }
+}
+
 /// "2026-03-22_20-34-32" → "2026-03-22T20:34:32"
 fn timestamp_to_iso(ts: &str) -> String {
     ts.replacen('_', "T", 1)
@@ -189,10 +207,10 @@ pub fn scan_teslacam_dir(root: &Path, db: &Database, vehicle_id: i64) -> ScanRes
 
         let event_type = detect_event_type(path, root);
 
-        // Sentry/Saved: 同一事件資料夾 → 同一事件（多個時間段）
-        // Recent: 每個時間戳獨立一個事件
+        // Sentry/Saved: 同一事件資料夾 → 同一事件
+        // Recent: 先用 "recent" 統一收集，稍後按時間連續性分組
         let event_key = if event_type == "recent" {
-            format!("recent::{}", ts)
+            "recent::all".to_string()
         } else {
             path.parent()
                 .unwrap_or(root)
@@ -208,17 +226,11 @@ pub fn scan_teslacam_dir(root: &Path, db: &Database, vehicle_id: i64) -> ScanRes
             .push((camera, path.to_path_buf(), file_size));
     }
 
-    // 第二步：寫入資料庫
-    let conn = db.conn.lock().unwrap();
-    conn.execute_batch("DELETE FROM telemetry; DELETE FROM clips; DELETE FROM events;")
-        .ok();
-
-    let mut sentry_count = 0usize;
-    let mut saved_count = 0usize;
-    let mut recent_count = 0usize;
+    // 第二步：將 recent::all 按時間連續性分成多個 session
+    // 兩個相鄰時間段間隔 <= 65 秒視為同一 session
+    let mut final_events: Vec<(String, Vec<Segment>, &str, String)> = Vec::new(); // (event_key, segments, type, source_dir)
 
     for (event_key, segments_map) in &event_map {
-        // 收集所有片段（已按時間排序，BTreeMap 保證）
         let segments: Vec<Segment> = segments_map
             .iter()
             .map(|(ts, clips)| Segment {
@@ -231,25 +243,69 @@ pub fn scan_teslacam_dir(root: &Path, db: &Database, vehicle_id: i64) -> ScanRes
             continue;
         }
 
+        if event_key == "recent::all" {
+            // 把連續的 recent 片段分組成 session
+            let mut sessions: Vec<Vec<Segment>> = Vec::new();
+            let mut current_session: Vec<Segment> = Vec::new();
+
+            for seg in segments {
+                if current_session.is_empty() {
+                    current_session.push(seg);
+                } else {
+                    let prev_ts = &current_session.last().unwrap().timestamp;
+                    let gap = timestamp_diff_seconds(&seg.timestamp, prev_ts);
+                    if gap <= 65.0 {
+                        current_session.push(seg);
+                    } else {
+                        sessions.push(std::mem::take(&mut current_session));
+                        current_session.push(seg);
+                    }
+                }
+            }
+            if !current_session.is_empty() {
+                sessions.push(current_session);
+            }
+
+            let source_dir = root.join("RecentClips").to_string_lossy().to_string();
+            for session in sessions {
+                final_events.push((
+                    format!("recent::{}", session[0].timestamp),
+                    session,
+                    "recent",
+                    source_dir.clone(),
+                ));
+            }
+        } else {
+            let event_type = if event_key.contains("SentryClips") {
+                "sentry"
+            } else if event_key.contains("SavedClips") {
+                "saved"
+            } else {
+                "recent"
+            };
+            let source_dir = event_key.clone();
+            final_events.push((event_key.clone(), segments, event_type, source_dir));
+        }
+    }
+
+    // 第三步：寫入資料庫
+    let conn = db.conn.lock().unwrap();
+    conn.execute_batch("DELETE FROM telemetry; DELETE FROM clips; DELETE FROM events;")
+        .ok();
+
+    let mut sentry_count = 0usize;
+    let mut saved_count = 0usize;
+    let mut recent_count = 0usize;
+
+    for (_event_key, segments, event_type, source_dir) in &final_events {
+        if segments.is_empty() {
+            continue;
+        }
+
         let first_ts = &segments[0].timestamp;
         let iso_ts = timestamp_to_iso(first_ts);
-        let total_duration = segments.len() as i64 * 60; // 每段約 60 秒
 
-        let event_type = if event_key.contains("SentryClips") {
-            "sentry"
-        } else if event_key.contains("SavedClips") {
-            "saved"
-        } else {
-            "recent"
-        };
-
-        let source_dir = if event_key.starts_with("recent::") {
-            root.join("RecentClips").to_string_lossy().to_string()
-        } else {
-            event_key.clone()
-        };
-
-        match event_type {
+        match *event_type {
             "sentry" => sentry_count += 1,
             "saved" => saved_count += 1,
             _ => recent_count += 1,
@@ -257,7 +313,7 @@ pub fn scan_teslacam_dir(root: &Path, db: &Database, vehicle_id: i64) -> ScanRes
 
         let result = conn.execute(
             "INSERT INTO events (vehicle_id, type, timestamp, duration_s, source_dir) VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![vehicle_id, event_type, iso_ts, total_duration, source_dir],
+            rusqlite::params![vehicle_id, event_type, iso_ts, 0, source_dir],
         );
 
         let event_id = match result {
@@ -305,7 +361,7 @@ pub fn scan_teslacam_dir(root: &Path, db: &Database, vehicle_id: i64) -> ScanRes
     }
 
     ScanResult {
-        total_events: event_map.len(),
+        total_events: final_events.len(),
         sentry_count,
         saved_count,
         recent_count,
