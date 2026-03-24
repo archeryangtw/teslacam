@@ -11,6 +11,7 @@ Browse, replay, analyze, and export your TeslaCam videos with synchronized 6-cam
 - **Multi-Segment Continuous Play** — Automatically merges consecutive clips; Sentry/Saved event folders play as one continuous event
 - **Frame Stepping** — Step forward/backward one frame at a time (arrow keys)
 - **Playback Speed Control** — 0.5x, 1x, 1.5x, 2x, 4x
+- **Real-Time Recording Timestamp** — Displays the actual recording date and time (YYYY-MM-DD HH:MM:SS) during playback
 
 ### Telemetry (SEI Data)
 - **Real-Time Dashboard** — Tesla Yoke steering wheel animation, speed, gear (P/R/N/D), throttle/brake bars, turn signals with blink animation
@@ -23,6 +24,7 @@ Browse, replay, analyze, and export your TeslaCam videos with synchronized 6-cam
 - **GPS Track Visualization** — Real-time driving route on OpenStreetMap via MapLibre GL
 - **Current Position Marker** — Follows playback with heading indicator
 - **Event Markers** — Click to jump to events on the map
+- **Minimizable** — Collapse to a map icon, expand on demand
 
 ### Bird's Eye View
 - **Surround Projection** — All 6 cameras projected into fan-shaped regions around a car diagram
@@ -44,10 +46,10 @@ Browse, replay, analyze, and export your TeslaCam videos with synchronized 6-cam
 - **Cross-Segment Export** — Automatically handles exports spanning multiple clips
 - **Standard Timestamp Watermark** — Real recording time (not relative)
 - **Telemetry Overlay** — Speed, gear, steering, throttle/brake burned into the export via ASS subtitles
-- **Event Report** — HTML report with driving summary, max/avg speed, detected events
+- **Event Report** — HTML report with driving summary, max/avg speed, detected events; Sentry reports show trigger time, timeline, GPS location, and parked status
 
 ### Management
-- **Multi-Vehicle Support** — Switch between multiple Tesla vehicles
+- **Multi-Vehicle Support** — Add, switch, and remove multiple Tesla vehicles via dropdown
 - **Backup & Delete** — Backup events to local folder, delete with confirmation
 - **Auto-Merge** — Consecutive RecentClips within 65s gap merged into sessions
 
@@ -94,7 +96,7 @@ npm install -g pnpm
 brew install ffmpeg
 
 # Clone and build
-git clone git@github.com:archeryangtw/teslacam.git
+git clone https://github.com/archeryangtw/teslacam.git
 cd teslacam
 pnpm install
 pnpm tauri dev        # Development mode
@@ -113,7 +115,7 @@ npm install -g pnpm
 winget install Gyan.FFmpeg
 
 # Clone and build
-git clone git@github.com:archeryangtw/teslacam.git
+git clone https://github.com/archeryangtw/teslacam.git
 cd teslacam
 pnpm install
 pnpm tauri dev        # Development mode
@@ -134,7 +136,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 npm install -g pnpm
 
 # Clone and build
-git clone git@github.com:archeryangtw/teslacam.git
+git clone https://github.com/archeryangtw/teslacam.git
 cd teslacam
 pnpm install
 pnpm tauri dev        # Development mode
@@ -208,6 +210,7 @@ MIT
 - **多段連續播放** — 自動合併連續片段；哨兵/手動保存事件資料夾自動合併為完整事件
 - **逐幀步進** — 前進/後退一個影格（方向鍵）
 - **播放速度控制** — 0.5x、1x、1.5x、2x、4x
+- **即時錄影時間** — 播放時顯示實際錄影日期時間（YYYY-MM-DD HH:MM:SS）
 
 ### 遙測資料（SEI）
 - **即時儀表板** — Tesla Yoke 方向盤動畫、時速、檔位（P/R/N/D）、油門/煞車進度條、方向燈閃爍
@@ -220,6 +223,7 @@ MIT
 - **GPS 軌跡** — 透過 MapLibre GL + OpenStreetMap 即時顯示行車路線
 - **即時位置標記** — 隨播放移動，三角形指示車頭方向
 - **事件標記** — 點擊跳到地圖上的事件位置
+- **可最小化** — 收合為地圖圖標，點擊展開
 
 ### 鳥瞰檢視
 - **環景投影** — 六鏡頭投影到車輛俯瞰圖周圍的扇形區域
@@ -241,10 +245,10 @@ MIT
 - **跨段匯出** — 自動處理跨越多個片段的匯出
 - **標準時間水印** — 顯示真實錄影時間
 - **遙測覆蓋** — 車速、檔位、方向盤、油門/煞車燒錄到匯出影片
-- **事件報告** — HTML 報告，含駕駛摘要、最高/平均車速、偵測事件
+- **事件報告** — HTML 報告：行車事件含駕駛摘要與偵測事件；哨兵事件含觸發時間、錄影時間軸、GPS 位置、停車狀態
 
 ### 管理
-- **多車管理** — 切換不同 Tesla 車輛
+- **多車管理** — 新增、切換、刪除不同 Tesla 車輛
 - **備份與刪除** — 備份事件到本機資料夾，刪除前確認
 - **自動合併** — RecentClips 連續片段（間隔 ≤ 65 秒）自動合併為行車 session
 
@@ -291,7 +295,7 @@ npm install -g pnpm
 brew install ffmpeg
 
 # 取得原始碼並編譯
-git clone git@github.com:archeryangtw/teslacam.git
+git clone https://github.com/archeryangtw/teslacam.git
 cd teslacam
 pnpm install
 pnpm tauri dev        # 開發模式
@@ -310,7 +314,7 @@ npm install -g pnpm
 winget install Gyan.FFmpeg
 
 # 取得原始碼並編譯
-git clone git@github.com:archeryangtw/teslacam.git
+git clone https://github.com/archeryangtw/teslacam.git
 cd teslacam
 pnpm install
 pnpm tauri dev        # 開發模式
@@ -331,7 +335,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 npm install -g pnpm
 
 # 取得原始碼並編譯
-git clone git@github.com:archeryangtw/teslacam.git
+git clone https://github.com/archeryangtw/teslacam.git
 cd teslacam
 pnpm install
 pnpm tauri dev        # 開發模式
