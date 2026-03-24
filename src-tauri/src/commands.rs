@@ -437,10 +437,10 @@ fn export_one_segment(
     }
     fp.push("[top][bottom]vstack=inputs=2[out]".into());
 
-    // 顯示標準時間：pts + epoch 偏移 → localtime 格式
+    // 顯示標準時間：pts + epoch → localtime（預設格式 YYYY-MM-DD HH:MM:SS）
     let epoch_sec = real_start_epoch as i64;
     fp.push(format!(
-        "[out]drawtext=text='%{{pts\\:localtime\\:{epoch_sec}\\:%Y-%m-%d %H\\:%M\\:%S}}':fontsize=24:fontcolor=white:borderw=2:bordercolor=black:x=10:y=10[timetext]"
+        "[out]drawtext=text='%{{pts\\:localtime\\:{epoch_sec}}}':fontsize=24:fontcolor=white:borderw=2:bordercolor=black:x=10:y=10[timetext]"
     ));
 
     // 如果有遙測資料，生成 ASS 字幕並疊加

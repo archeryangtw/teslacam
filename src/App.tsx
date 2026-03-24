@@ -259,7 +259,6 @@ function App() {
             {selectedEvent && selectedEvent.clips.length > 0 && (
               showBirdEye ? (
                 <BirdEyeView
-                  videoRefs={videoGridRef.current?.getVideoRefs() ?? new Map()}
                   visible={true}
                   onToggle={() => setShowBirdEye(false)}
                 />
