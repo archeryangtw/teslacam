@@ -1,0 +1,73 @@
+.map-panel {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 10;
+  width: 300px;
+  height: 220px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+}
+
+.map-container {
+  width: 100%;
+  height: 100%;
+}
+
+.map-info {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-family: "SF Mono", "Menlo", monospace;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* 事件標記 */
+.map-event-marker {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.marker-sentry { background: #e94560; }
+.marker-saved  { background: #4ecdc4; }
+.marker-recent { background: #888; }
+
+/* 目前位置 */
+.map-current-marker {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 14px solid #4ecdc4;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+/* 覆蓋 maplibre 預設樣式 */
+.map-panel .maplibregl-ctrl-top-left {
+  top: 4px;
+  left: 4px;
+}
+
+.map-panel .maplibregl-ctrl-group {
+  background: rgba(22, 33, 62, 0.85);
+  border: 1px solid var(--border);
+}
+
+.map-panel .maplibregl-ctrl-group button {
+  width: 24px;
+  height: 24px;
+}

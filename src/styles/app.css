@@ -136,3 +136,20 @@
   display: flex;
   min-height: 0;
 }
+
+.map-toggle-btn {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 10;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(22, 33, 62, 0.85);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

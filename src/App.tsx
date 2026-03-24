@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import Sidebar from "./components/Sidebar";
 import VideoGrid, { type VideoGridHandle } from "./components/VideoGrid";
 import Timeline from "./components/Timeline";
 import TelemetryOverlay from "./components/TelemetryOverlay";
+import MapPanel from "./components/MapPanel";
 import { useTeslaCam } from "./hooks/useTeslaCam";
 import type { TeslaCamEvent } from "./types/events";
 import "./styles/app.css";
@@ -28,11 +29,44 @@ function App() {
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showTelemetry, setShowTelemetry] = useState(true);
+  const [showMap, setShowMap] = useState(true);
   const [markIn, setMarkIn] = useState<number | null>(null);
   const [markOut, setMarkOut] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [telemetryTrack, setTelemetryTrack] = useState<{ time_sec: number; lat: number; lon: number; speed_kmh: number; heading: number }[]>([]);
 
   const videoGridRef = useRef<VideoGridHandle>(null);
+
+  // 當選中事件改變時，載入 GPS 軌跡
+  useEffect(() => {
+    if (!selectedEvent) { setTelemetryTrack([]); return; }
+    const frontClips = selectedEvent.clips
+      .filter((c) => c.camera === "front")
+      .sort((a, b) => a.segmentIndex - b.segmentIndex);
+    if (frontClips.length === 0) { setTelemetryTrack([]); return; }
+
+    let cancelled = false;
+    (async () => {
+      const allPoints: { time_sec: number; lat: number; lon: number; speed_kmh: number; heading: number }[] = [];
+      let timeOffset = 0;
+      for (const clip of frontClips) {
+        if (cancelled) break;
+        try {
+          const frames = await invoke<{ time_sec: number; lat: number; lon: number; speed_kmh: number; heading: number }[]>(
+            "parse_telemetry", { filePath: clip.filePath }
+          );
+          for (const f of frames) {
+            if (f.lat !== 0 && f.lon !== 0) {
+              allPoints.push({ ...f, time_sec: f.time_sec + timeOffset });
+            }
+          }
+        } catch { /* ignore */ }
+        timeOffset += clip.durationSec;
+      }
+      if (!cancelled) setTelemetryTrack(allPoints);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedEvent]);
 
   const handleSelectEvent = useCallback((event: TeslaCamEvent) => {
     setSelectedEvent(event);
@@ -176,6 +210,23 @@ function App() {
               visible={showTelemetry}
               onToggle={() => setShowTelemetry(!showTelemetry)}
             />
+            <MapPanel
+              events={events}
+              selectedEvent={selectedEvent}
+              telemetryTrack={telemetryTrack}
+              currentTime={currentTime}
+              visible={showMap && telemetryTrack.length > 0}
+              onSelectEvent={handleSelectEvent}
+            />
+            {telemetryTrack.length > 0 && !showMap && (
+              <button
+                className="map-toggle-btn"
+                onClick={() => setShowMap(true)}
+                title="顯示地圖"
+              >
+                🗺
+              </button>
+            )}
           </div>
           <Timeline
             event={selectedEvent}
