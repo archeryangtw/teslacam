@@ -206,6 +206,8 @@ const VideoGrid = forwardRef<VideoGridHandle, VideoGridProps>(function VideoGrid
 
   // 外部 seek（用 front 時長基準）
   useEffect(() => {
+    if (frontClips.length === 0) return;
+
     const mainClips = frontClips;
     let remaining = currentTime;
     let targetSeg = 0;
@@ -222,7 +224,7 @@ const VideoGrid = forwardRef<VideoGridHandle, VideoGridProps>(function VideoGrid
       remaining = mainClips[targetSeg]?.durationSec ?? 0;
     }
 
-    const curSeg = segmentIndexes.get(activeCamera) ?? 0;
+    const curSeg = segmentIndexes.get("front") ?? 0;
     if (targetSeg !== curSeg) {
       setSegmentIndexes((prev) => {
         const next = new Map(prev);
@@ -254,8 +256,9 @@ const VideoGrid = forwardRef<VideoGridHandle, VideoGridProps>(function VideoGrid
     <div className={`video-grid grid-${availableCameras.length}`}>
       {availableCameras.map((camera) => {
         const camClips = cameraSegments.get(camera)!;
-        const segIdx = segmentIndexes.get(camera) ?? 0;
-        const currentClip = camClips[Math.min(segIdx, camClips.length - 1)];
+        const segIdx = Math.min(segmentIndexes.get(camera) ?? 0, camClips.length - 1);
+        const currentClip = camClips[Math.max(0, segIdx)];
+        if (!currentClip) return null;
         const isMain = camera === activeCamera;
         const videoSrc = convertFileSrc(currentClip.filePath);
 

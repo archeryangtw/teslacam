@@ -105,9 +105,11 @@ function App() {
   const handleSelectEvent = useCallback((event: TeslaCamEvent) => {
     setSelectedEvent(event);
     setCurrentTime(0);
+    setDuration(0);
     setIsPlaying(false);
     setMarkIn(null);
     setMarkOut(null);
+    setShowBirdEye(false);
   }, []);
 
   const handleCameraClick = useCallback((camera: string) => {
