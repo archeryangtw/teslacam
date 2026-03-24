@@ -251,21 +251,25 @@ function App() {
               telemetryTrack={telemetryTrack}
               currentTime={currentTime}
               visible={showMap && telemetryTrack.length > 0}
+              onToggle={() => setShowMap(false)}
               onSelectEvent={handleSelectEvent}
             />
-            <BirdEyeView
-              videoRefs={videoGridRef.current?.getVideoRefs() ?? new Map()}
-              visible={showBirdEye && (selectedEvent?.clips.length ?? 0) > 0}
-              onToggle={() => setShowBirdEye(!showBirdEye)}
-            />
-            {(selectedEvent?.clips.length ?? 0) > 0 && !showBirdEye && (
-              <button
-                className="birdeye-toggle-btn"
-                onClick={() => setShowBirdEye(true)}
-                title="鳥瞰檢視"
-              >
-                ⊞
-              </button>
+            {selectedEvent && selectedEvent.clips.length > 0 && (
+              showBirdEye ? (
+                <BirdEyeView
+                  videoRefs={videoGridRef.current?.getVideoRefs() ?? new Map()}
+                  visible={true}
+                  onToggle={() => setShowBirdEye(false)}
+                />
+              ) : (
+                <button
+                  className="birdeye-toggle-btn"
+                  onClick={() => setShowBirdEye(true)}
+                  title="鳥瞰檢視"
+                >
+                  ⊞
+                </button>
+              )
             )}
             {telemetryTrack.length > 0 && !showMap && (
               <button

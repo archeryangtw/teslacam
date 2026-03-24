@@ -18,6 +18,7 @@ interface MapPanelProps {
   telemetryTrack: TelemetryPoint[];
   currentTime: number;
   visible: boolean;
+  onToggle: () => void;
   onSelectEvent?: (event: TeslaCamEvent) => void;
 }
 
@@ -184,6 +185,7 @@ export default function MapPanel({
 
   return (
     <div className="map-panel">
+      <button className="map-close" onClick={onToggle} title="最小化地圖">─</button>
       <div ref={mapContainer} className="map-container" />
       {currentPos && (
         <div className="map-info">
