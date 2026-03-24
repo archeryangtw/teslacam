@@ -102,11 +102,7 @@ function App() {
     return () => { cancelled = true; };
   }, [selectedEvent]);
 
-  // Debug
-  console.log("[App] selectedEvent:", selectedEvent?.id, "clips:", selectedEvent?.clips.length, "duration:", duration);
-
   const handleSelectEvent = useCallback((event: TeslaCamEvent) => {
-    console.log("[App] selectEvent:", event.id, "clips:", event.clips.length);
     setSelectedEvent(event);
     setCurrentTime(0);
     setDuration(0);
