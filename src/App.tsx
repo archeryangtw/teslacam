@@ -18,7 +18,11 @@ function App() {
     scanning,
     scanResult,
     error,
+    vehicles,
+    activeVehicleId,
     selectAndScan,
+    switchVehicle,
+    removeVehicle,
     deleteEvent,
     backupEvent,
   } = useTeslaCam();
@@ -102,6 +106,47 @@ function App() {
     return () => { cancelled = true; };
   }, [selectedEvent]);
 
+  // 鍵盤快捷鍵
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+      switch (e.code) {
+        case "Space":
+          e.preventDefault();
+          setIsPlaying((p) => !p);
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          setIsPlaying(false);
+          videoGridRef.current?.frameStep(-1);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          setIsPlaying(false);
+          videoGridRef.current?.frameStep(1);
+          break;
+        case "KeyI":
+          if (!e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            setMarkIn(currentTime);
+          }
+          break;
+        case "KeyO":
+          if (!e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            setMarkOut(currentTime);
+          }
+          break;
+        case "Escape":
+          setMarkIn(null);
+          setMarkOut(null);
+          break;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [currentTime]);
+
   const handleSelectEvent = useCallback((event: TeslaCamEvent) => {
     setSelectedEvent(event);
     setCurrentTime(0);
@@ -184,6 +229,7 @@ function App() {
           outputPath: selected,
           startTime: markIn !== null ? startTime : null,
           endTime: markOut !== null ? endTime : null,
+          withTelemetry: true,
         });
         alert(`匯出完成：${selected}`);
       } catch (e) {
@@ -207,8 +253,22 @@ function App() {
               {scanResult.total_events} 個事件 · {scanResult.total_clips} 個片段
             </span>
           )}
+          {vehicles.length > 0 && (
+            <select
+              className="vehicle-select"
+              value={activeVehicleId ?? ""}
+              onChange={(e) => {
+                const v = vehicles.find((v) => v.id === Number(e.target.value));
+                if (v) switchVehicle(v);
+              }}
+            >
+              {vehicles.map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          )}
           <button className="btn" onClick={selectAndScan} disabled={scanning}>
-            {rootDir ? "重新掃描" : "選擇 TeslaCam 資料夾"}
+            {rootDir ? "重新掃描" : "新增車輛"}
           </button>
         </div>
       </header>

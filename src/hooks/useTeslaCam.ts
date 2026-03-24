@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { TeslaCamEvent } from "../types/events";
@@ -11,6 +11,13 @@ interface ScanResult {
   total_clips: number;
   total_size_bytes: number;
   errors: string[];
+}
+
+interface Vehicle {
+  id: number;
+  name: string;
+  rootPath: string;
+  createdAt: string;
 }
 
 interface EventFromBackend {
@@ -69,6 +76,18 @@ export function useTeslaCam() {
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [activeVehicleId, setActiveVehicleId] = useState<number | null>(null);
+
+  // 載入車輛列表
+  const loadVehicles = useCallback(async () => {
+    try {
+      const list = await invoke<Vehicle[]>("get_vehicles");
+      setVehicles(list);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { loadVehicles(); }, [loadVehicles]);
 
   const selectAndScan = useCallback(async () => {
     try {
@@ -85,9 +104,35 @@ export function useTeslaCam() {
       setRootDir(dir);
       setScanning(true);
 
-      const result = await invoke<ScanResult>("scan_directory", { path: dir, vehicleId: null });
+      // 自動建立或取得車輛
+      let vehicleId = activeVehicleId;
+      if (!vehicleId) {
+        const name = dir.split("/").pop() || "Tesla";
+        vehicleId = await invoke<number>("add_vehicle", { name, rootPath: dir });
+        setActiveVehicleId(vehicleId);
+      }
+
+      const result = await invoke<ScanResult>("scan_directory", { path: dir, vehicleId });
       setScanResult(result);
 
+      const eventsData = await invoke<EventFromBackend[]>("get_events");
+      setEvents(eventsData.map(mapEvent));
+      await loadVehicles();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setScanning(false);
+    }
+  }, [activeVehicleId, loadVehicles]);
+
+  const switchVehicle = useCallback(async (vehicle: Vehicle) => {
+    setActiveVehicleId(vehicle.id);
+    setRootDir(vehicle.rootPath);
+    setScanning(true);
+    setError(null);
+    try {
+      const result = await invoke<ScanResult>("scan_directory", { path: vehicle.rootPath, vehicleId: vehicle.id });
+      setScanResult(result);
       const eventsData = await invoke<EventFromBackend[]>("get_events");
       setEvents(eventsData.map(mapEvent));
     } catch (e) {
@@ -96,6 +141,21 @@ export function useTeslaCam() {
       setScanning(false);
     }
   }, []);
+
+  const removeVehicle = useCallback(async (vehicleId: number) => {
+    try {
+      await invoke("delete_vehicle", { vehicleId });
+      if (activeVehicleId === vehicleId) {
+        setActiveVehicleId(null);
+        setEvents([]);
+        setRootDir(null);
+        setScanResult(null);
+      }
+      await loadVehicles();
+    } catch (e) {
+      setError(String(e));
+    }
+  }, [activeVehicleId, loadVehicles]);
 
   const deleteEvent = useCallback(
     async (eventId: number, deleteFiles: boolean) => {
@@ -117,16 +177,13 @@ export function useTeslaCam() {
         title: "選擇備份目的地",
       });
       if (!selected) return;
-
       const count = await invoke<number>("backup_event", {
         eventId,
         targetDir: selected as string,
       });
-
       setEvents((prev) =>
         prev.map((e) => (e.id === eventId ? { ...e, backedUp: true } : e))
       );
-
       return count;
     } catch (e) {
       setError(String(e));
@@ -140,7 +197,11 @@ export function useTeslaCam() {
     scanning,
     scanResult,
     error,
+    vehicles,
+    activeVehicleId,
     selectAndScan,
+    switchVehicle,
+    removeVehicle,
     deleteEvent,
     backupEvent,
   };
