@@ -1,6 +1,7 @@
 use crate::db::Database;
 use crate::scanner;
 use crate::sei;
+use chrono::TimeZone;
 use serde::Serialize;
 use tauri::State;
 
@@ -195,10 +196,12 @@ pub fn parse_telemetry(file_path: String) -> Result<Vec<sei::TelemetryFrame>, St
 }
 
 /// 單段匯出：把一個 segment 的六鏡頭合併成環景影片
+/// `real_start_epoch` = 該段 trim_start 對應的 Unix 時間戳（秒）
 fn export_one_segment(
     cam_map: &std::collections::HashMap<String, String>,
     trim_start: f64,
     trim_end: f64,
+    real_start_epoch: f64,
     output_path: &str,
 ) -> Result<(), String> {
     let cameras = [
@@ -241,7 +244,12 @@ fn export_one_segment(
         fp.push("[v2][v3]hstack=inputs=2[bottom]".into());
     }
     fp.push("[top][bottom]vstack=inputs=2[out]".into());
-    fp.push("[out]drawtext=text='%{pts\\:hms}':fontsize=24:fontcolor=white:borderw=2:bordercolor=black:x=10:y=10[final]".into());
+
+    // 顯示標準時間：basetime（微秒）+ pts 自動遞增
+    let basetime_us = (real_start_epoch * 1_000_000.0) as i64;
+    fp.push(format!(
+        "[out]drawtext=basetime={basetime_us}:text='%{{localtime\\:%Y-%m-%d %H\\:%M\\:%S}}':fontsize=24:fontcolor=white:borderw=2:bordercolor=black:x=10:y=10[final]"
+    ));
 
     let filter = fp.join(";");
 
@@ -268,9 +276,15 @@ pub async fn export_surround_video(
     end_time: Option<f64>,
     db: State<'_, Database>,
 ) -> Result<String, String> {
-    // 讀取所有 segment
-    let segments: Vec<(i64, std::collections::HashMap<String, String>, f64)> = {
+    // 讀取事件時間戳和所有 segment
+    let (event_timestamp, segments): (String, Vec<(i64, std::collections::HashMap<String, String>, f64)>) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+        // 取事件時間戳
+        let ts: String = conn
+            .query_row("SELECT timestamp FROM events WHERE id = ?1", [event_id], |row| row.get(0))
+            .map_err(|e| e.to_string())?;
+
         let mut stmt = conn
             .prepare("SELECT segment_index, camera, file_path, duration_s FROM clips WHERE event_id = ?1 ORDER BY segment_index, camera")
             .map_err(|e| e.to_string())?;
@@ -285,12 +299,24 @@ pub async fn export_surround_video(
             let e = seg_map.entry(si).or_insert_with(|| (std::collections::HashMap::new(), dur));
             e.0.insert(cam, path);
         }
-        seg_map.into_iter().map(|(i, (c, d))| (i, c, d)).collect()
+        (ts, seg_map.into_iter().map(|(i, (c, d))| (i, c, d)).collect())
     };
 
     if segments.is_empty() {
         return Err("找不到影片片段".to_string());
     }
+
+    // 解析事件時間戳為 Unix epoch（秒）
+    // 格式："2026-03-23T13:01:18" — 視為本地時間
+    let event_epoch = chrono::NaiveDateTime::parse_from_str(&event_timestamp, "%Y-%m-%dT%H:%M:%S")
+        .map(|dt| {
+            let local = chrono::Local::now().timezone();
+            dt.and_local_timezone(local)
+                .single()
+                .map(|t| t.timestamp() as f64)
+                .unwrap_or(0.0)
+        })
+        .unwrap_or(0.0);
 
     // 計算每段的累積起始時間
     let total_dur: f64 = segments.iter().map(|(_, _, d)| d).sum();
@@ -327,9 +353,9 @@ pub async fn export_surround_video(
     log::info!("匯出: {:.1}s-{:.1}s, 共 {} 段", ss, ee, parts.len());
 
     if parts.len() == 1 {
-        // 單段直接匯出
         let (seg_i, ts, te) = parts[0];
-        export_one_segment(&segments[seg_i].1, ts, te, &output_path)?;
+        let real_epoch = event_epoch + seg_starts[seg_i] + ts;
+        export_one_segment(&segments[seg_i].1, ts, te, real_epoch, &output_path)?;
     } else {
         // 多段：各段匯出暫存檔 → concat 合併
         let tmp_dir = std::env::temp_dir().join("teslacam_export");
@@ -339,8 +365,9 @@ pub async fn export_surround_video(
         for (idx, (seg_i, ts, te)) in parts.iter().enumerate() {
             let tmp_path = tmp_dir.join(format!("part_{idx}.mp4"));
             let tmp_str = tmp_path.to_string_lossy().to_string();
+            let real_epoch = event_epoch + seg_starts[*seg_i] + ts;
             log::info!("  段 {}: trim {:.3}-{:.3} → {}", seg_i, ts, te, tmp_str);
-            export_one_segment(&segments[*seg_i].1, *ts, *te, &tmp_str)?;
+            export_one_segment(&segments[*seg_i].1, *ts, *te, real_epoch, &tmp_str)?;
             tmp_files.push(tmp_str);
         }
 
