@@ -10,6 +10,7 @@ interface SidebarProps {
   onDelete?: (eventId: number) => void;
   onBackup?: (eventId: number) => void;
   onExport?: (eventId: number) => void;
+  onReport?: (eventId: number) => void;
   rootDir: string | null;
 }
 
@@ -62,6 +63,7 @@ export default function Sidebar({
   onDelete,
   onBackup,
   onExport,
+  onReport,
   rootDir,
 }: SidebarProps) {
   const grouped = groupByType(events);
@@ -155,6 +157,7 @@ export default function Sidebar({
 
           <div className="sidebar-actions">
             <button className="action-btn action-btn-export" onClick={() => onExport?.(sel.id)}>匯出六鏡頭影片</button>
+            <button className="action-btn" onClick={() => onReport?.(sel.id)}>匯出事件報告</button>
             <button className="action-btn" onClick={() => onBackup?.(sel.id)}>備份到本機</button>
             {!confirming ? (
               <button className="action-btn action-btn-danger" onClick={() => setConfirming(true)}>刪除此事件</button>

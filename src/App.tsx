@@ -35,6 +35,24 @@ function App() {
   const [markIn, setMarkIn] = useState<number | null>(null);
   const [markOut, setMarkOut] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  const handleReport = useCallback(async (eventId: number) => {
+    try {
+      const html = await invoke<string>("generate_report", { eventId });
+      const selected = await saveDialog({
+        title: "儲存事件報告",
+        defaultPath: `teslacam-report-${eventId}.html`,
+        filters: [{ name: "HTML", extensions: ["html"] }],
+      });
+      if (selected) {
+        const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+        await writeTextFile(selected, html);
+        alert(`報告已儲存：${selected}`);
+      }
+    } catch (e) {
+      alert(`報告生成失敗：${e}`);
+    }
+  }, []);
   const [telemetryTrack, setTelemetryTrack] = useState<{ time_sec: number; lat: number; lon: number; speed_kmh: number; heading: number }[]>([]);
   const [detectedEvents, setDetectedEvents] = useState<{ event_type: string; time_sec: number; duration_sec: number; description: string; severity: number }[]>([]);
 
@@ -204,6 +222,7 @@ function App() {
           onDelete={handleDelete}
           onBackup={handleBackup}
           onExport={handleExport}
+          onReport={handleReport}
           rootDir={rootDir}
         />
 

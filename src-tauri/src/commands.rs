@@ -244,6 +244,142 @@ pub fn delete_vehicle(vehicle_id: i64, db: State<'_, Database>) -> Result<(), St
     Ok(())
 }
 
+/// 生成事件報告 HTML（可列印為 PDF）
+#[tauri::command]
+pub fn generate_report(
+    event_id: i64,
+    db: State<'_, Database>,
+) -> Result<String, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // 取得事件資訊
+    let (etype, timestamp, duration, source_dir): (String, String, i64, String) = conn
+        .query_row(
+            "SELECT type, timestamp, duration_s, source_dir FROM events WHERE id = ?1",
+            [event_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get::<_, Option<i64>>(2)?.unwrap_or(0), row.get(3)?)),
+        )
+        .map_err(|e| e.to_string())?;
+
+    // 取得片段數
+    let clip_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM clips WHERE event_id = ?1", [event_id], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+
+    let cam_count: i64 = conn
+        .query_row("SELECT COUNT(DISTINCT camera) FROM clips WHERE event_id = ?1", [event_id], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+
+    let total_size: i64 = conn
+        .query_row("SELECT COALESCE(SUM(file_size), 0) FROM clips WHERE event_id = ?1", [event_id], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+
+    // 取得 front 鏡頭的遙測摘要
+    let front_path: Option<String> = conn
+        .query_row(
+            "SELECT file_path FROM clips WHERE event_id = ?1 AND camera = 'front' AND segment_index = 0",
+            [event_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let (mut max_speed, mut avg_speed, mut brake_count, mut detected_events_html) =
+        (0.0f32, 0.0f32, 0u32, String::new());
+
+    if let Some(path) = &front_path {
+        if let Ok(frames) = sei::parse_sei_from_file(path) {
+            if !frames.is_empty() {
+                let speeds: Vec<f32> = frames.iter().map(|f| f.speed_kmh).collect();
+                max_speed = speeds.iter().cloned().fold(0.0f32, f32::max);
+                avg_speed = speeds.iter().sum::<f32>() / speeds.len() as f32;
+                brake_count = frames.iter().filter(|f| f.brake).count() as u32;
+            }
+
+            let detected = event_detection::detect_events(&frames);
+            for de in &detected {
+                let severity_class = match de.severity {
+                    3 => "high",
+                    2 => "medium",
+                    _ => "low",
+                };
+                let mins = (de.time_sec / 60.0) as u32;
+                let secs = (de.time_sec % 60.0) as u32;
+                detected_events_html.push_str(&format!(
+                    "<tr class=\"{severity_class}\"><td>{mins}:{secs:02}</td><td>{}</td><td>{}</td></tr>",
+                    de.description, de.severity
+                ));
+            }
+        }
+    }
+
+    let type_label = match etype.as_str() {
+        "sentry" => "哨兵模式",
+        "saved" => "手動保存",
+        _ => "行車紀錄",
+    };
+
+    let size_mb = total_size as f64 / (1024.0 * 1024.0);
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>TeslaCam 事件報告</title>
+<style>
+  body {{ font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; color: #333; }}
+  h1 {{ color: #e94560; border-bottom: 2px solid #e94560; padding-bottom: 8px; }}
+  table {{ width: 100%; border-collapse: collapse; margin: 16px 0; }}
+  th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+  th {{ background: #f5f5f5; }}
+  .high {{ background: #fff0f0; }}
+  .medium {{ background: #fffbf0; }}
+  .summary {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }}
+  .summary-card {{ background: #f9f9f9; border-radius: 8px; padding: 16px; }}
+  .summary-card h3 {{ margin: 0 0 8px; font-size: 14px; color: #888; }}
+  .summary-card .value {{ font-size: 28px; font-weight: 700; }}
+  .footer {{ margin-top: 40px; font-size: 12px; color: #999; text-align: center; }}
+</style>
+</head>
+<body>
+<h1>TeslaCam 事件報告</h1>
+
+<table>
+<tr><th>事件類型</th><td>{type_label}</td></tr>
+<tr><th>時間</th><td>{timestamp}</td></tr>
+<tr><th>時長</th><td>{} 分 {} 秒</td></tr>
+<tr><th>鏡頭數</th><td>{cam_count}</td></tr>
+<tr><th>片段數</th><td>{clip_count}</td></tr>
+<tr><th>檔案大小</th><td>{size_mb:.1} MB</td></tr>
+<tr><th>來源路徑</th><td style="word-break:break-all;">{source_dir}</td></tr>
+</table>
+
+<h2>駕駛數據摘要</h2>
+<div class="summary">
+  <div class="summary-card"><h3>最高車速</h3><div class="value">{max_speed:.0} km/h</div></div>
+  <div class="summary-card"><h3>平均車速</h3><div class="value">{avg_speed:.0} km/h</div></div>
+  <div class="summary-card"><h3>煞車次數</h3><div class="value">{brake_count}</div></div>
+</div>
+
+<h2>偵測到的事件</h2>
+{detected_table}
+
+<div class="footer">
+  由 TeslaCam Manager 自動生成 · {gen_time}
+</div>
+</body></html>"#,
+        duration / 60, duration % 60,
+        detected_table = if detected_events_html.is_empty() {
+            "<p>未偵測到特殊事件</p>".to_string()
+        } else {
+            format!("<table><tr><th>時間</th><th>描述</th><th>嚴重度</th></tr>{detected_events_html}</table>")
+        },
+        gen_time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+    );
+
+    Ok(html)
+}
+
 /// 偵測影片中的駕駛事件（急煞車、急轉彎、倒車等）
 #[tauri::command]
 pub fn detect_events(file_path: String) -> Result<Vec<event_detection::DetectedEvent>, String> {
