@@ -22,8 +22,16 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         conn.execute_batch(
             "
+            CREATE TABLE IF NOT EXISTS vehicles (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT NOT NULL,
+                root_path   TEXT NOT NULL,
+                created_at  TEXT DEFAULT (datetime('now'))
+            );
+
             CREATE TABLE IF NOT EXISTS events (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                vehicle_id  INTEGER DEFAULT 0,
                 type        TEXT NOT NULL,
                 timestamp   TEXT NOT NULL,
                 duration_s  INTEGER,

@@ -85,7 +85,7 @@ export function useTeslaCam() {
       setRootDir(dir);
       setScanning(true);
 
-      const result = await invoke<ScanResult>("scan_directory", { path: dir });
+      const result = await invoke<ScanResult>("scan_directory", { path: dir, vehicleId: null });
       setScanResult(result);
 
       const eventsData = await invoke<EventFromBackend[]>("get_events");

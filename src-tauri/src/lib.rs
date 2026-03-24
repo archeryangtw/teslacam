@@ -41,6 +41,9 @@ pub fn run() {
             commands::parse_telemetry,
             commands::detect_events,
             commands::export_surround_video,
+            commands::get_vehicles,
+            commands::add_vehicle,
+            commands::delete_vehicle,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

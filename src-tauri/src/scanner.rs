@@ -144,7 +144,7 @@ struct Segment {
     clips: Vec<(String, PathBuf, u64)>, // (camera, path, size)
 }
 
-pub fn scan_teslacam_dir(root: &Path, db: &Database) -> ScanResult {
+pub fn scan_teslacam_dir(root: &Path, db: &Database, vehicle_id: i64) -> ScanResult {
     let mut errors = Vec::new();
     let mut total_clips = 0u64;
     let mut total_size = 0u64;
@@ -256,8 +256,8 @@ pub fn scan_teslacam_dir(root: &Path, db: &Database) -> ScanResult {
         }
 
         let result = conn.execute(
-            "INSERT INTO events (type, timestamp, duration_s, source_dir) VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![event_type, iso_ts, total_duration, source_dir],
+            "INSERT INTO events (vehicle_id, type, timestamp, duration_s, source_dir) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![vehicle_id, event_type, iso_ts, total_duration, source_dir],
         );
 
         let event_id = match result {

@@ -38,7 +38,7 @@ pub struct ClipResponse {
 
 /// 掃描 TeslaCam 資料夾
 #[tauri::command]
-pub fn scan_directory(path: String, db: State<'_, Database>) -> Result<scanner::ScanResult, String> {
+pub fn scan_directory(path: String, vehicle_id: Option<i64>, db: State<'_, Database>) -> Result<scanner::ScanResult, String> {
     let root = std::path::PathBuf::from(&path);
     if !root.exists() {
         return Err(format!("路徑不存在: {}", path));
@@ -47,7 +47,7 @@ pub fn scan_directory(path: String, db: State<'_, Database>) -> Result<scanner::
         return Err(format!("不是目錄: {}", path));
     }
 
-    Ok(scanner::scan_teslacam_dir(&root, &db))
+    Ok(scanner::scan_teslacam_dir(&root, &db, vehicle_id.unwrap_or(0)))
 }
 
 /// 取得所有事件
@@ -195,6 +195,53 @@ pub fn backup_event(event_id: i64, target_dir: String, db: State<'_, Database>) 
 pub fn parse_telemetry(file_path: String) -> Result<Vec<sei::TelemetryFrame>, String> {
     let raw_frames = sei::parse_sei_from_file(&file_path)?;
     Ok(sei::downsample_by_time(&raw_frames, 0.15))
+}
+
+/// 取得所有車輛
+#[tauri::command]
+pub fn get_vehicles(db: State<'_, Database>) -> Result<Vec<serde_json::Value>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, root_path, created_at FROM vehicles ORDER BY created_at DESC")
+        .map_err(|e| e.to_string())?;
+    let vehicles: Vec<serde_json::Value> = stmt
+        .query_map([], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "name": row.get::<_, String>(1)?,
+                "rootPath": row.get::<_, String>(2)?,
+                "createdAt": row.get::<_, String>(3)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(vehicles)
+}
+
+/// 新增車輛
+#[tauri::command]
+pub fn add_vehicle(name: String, root_path: String, db: State<'_, Database>) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO vehicles (name, root_path) VALUES (?1, ?2)",
+        rusqlite::params![name, root_path],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// 刪除車輛及其所有事件
+#[tauri::command]
+pub fn delete_vehicle(vehicle_id: i64, db: State<'_, Database>) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM clips WHERE event_id IN (SELECT id FROM events WHERE vehicle_id = ?1)", [vehicle_id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM events WHERE vehicle_id = ?1", [vehicle_id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM vehicles WHERE id = ?1", [vehicle_id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// 偵測影片中的駕駛事件（急煞車、急轉彎、倒車等）
