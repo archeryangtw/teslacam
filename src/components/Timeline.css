@@ -1,62 +1,125 @@
 .timeline-area {
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
-  padding: 8px 16px 12px;
+  padding: 6px 12px 8px;
   flex-shrink: 0;
 }
 
 .timeline-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 6px;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.tl-btn {
+  padding: 2px 6px;
+  font-size: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.1s;
+  flex-shrink: 0;
+}
+
+.tl-btn:hover:not(:disabled) {
+  border-color: #555;
+  color: var(--text-primary);
+}
+
+.tl-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .play-btn {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: var(--accent-red);
   border: none;
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background 0.15s;
+  cursor: pointer;
 }
 
-.play-btn:hover {
+.play-btn:hover:not(:disabled) {
   background: #d63851;
+}
+
+.play-btn:disabled {
+  opacity: 0.3;
 }
 
 .time-display {
   font-family: "SF Mono", "Menlo", monospace;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.time-elapsed {
+  color: var(--text-muted) !important;
+  font-size: 11px !important;
+}
+
+.tl-spacer {
+  flex: 1;
+}
+
+/* 標記按鈕 */
+.mark-btn {
+  font-weight: 700;
+  font-family: "SF Mono", "Menlo", monospace;
+  min-width: 22px;
+  text-align: center;
+}
+
+.mark-btn.mark-active {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: var(--accent-cyan-dim);
+}
+
+.mark-range {
+  font-size: 10px;
+  font-family: "SF Mono", "Menlo", monospace;
+  color: var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+.mark-duration {
+  color: var(--text-muted);
+  margin-left: 4px;
 }
 
 .speed-btn {
-  margin-left: auto;
-  padding: 3px 8px;
-  font-size: 11px;
+  padding: 2px 6px;
+  font-size: 10px;
   font-family: "SF Mono", "Menlo", monospace;
   border-radius: 4px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);
-  transition: all 0.15s;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .speed-btn:hover {
   color: var(--text-secondary);
-  border-color: #444;
+  border-color: #555;
 }
 
+/* 時間軸 */
 .timeline-bar {
   position: relative;
-  height: 32px;
+  height: 28px;
   background: var(--bg-tertiary);
   border-radius: 4px;
   overflow: hidden;
@@ -73,7 +136,7 @@
   top: 0;
   left: 0;
   height: 100%;
-  background: rgba(233, 69, 96, 0.2);
+  background: rgba(233, 69, 96, 0.15);
   pointer-events: none;
 }
 
@@ -83,11 +146,49 @@
   width: 2px;
   height: 100%;
   background: #fff;
-  transition: left 0.05s linear;
   pointer-events: none;
 }
 
-.time-elapsed {
-  color: var(--text-muted) !important;
-  font-size: 11px !important;
+/* 標記範圍 */
+.timeline-mark-range {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(78, 205, 196, 0.15);
+  pointer-events: none;
+}
+
+.timeline-mark {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  pointer-events: none;
+}
+
+.timeline-mark-in {
+  background: var(--accent-cyan);
+}
+
+.timeline-mark-out {
+  background: var(--accent-cyan);
+}
+
+.timeline-mark-in::after,
+.timeline-mark-out::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--accent-cyan);
+}
+
+.timeline-mark-in::after {
+  left: 0;
+}
+
+.timeline-mark-out::after {
+  right: 0;
 }

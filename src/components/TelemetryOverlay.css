@@ -1,0 +1,298 @@
+.telemetry-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(22, 33, 62, 0.85);
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.telemetry-toggle:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.telemetry-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 230px;
+  background: rgba(12, 15, 28, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+}
+
+.telemetry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.telemetry-header-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.telemetry-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.telemetry-btn:hover {
+  color: #fff;
+}
+
+/* 縮小模式 */
+.telemetry-mini {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 4px 10px;
+  background: rgba(12, 15, 28, 0.88);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.telemetry-mini:hover {
+  border-color: var(--accent-cyan);
+}
+
+.mini-speed {
+  font-size: 18px;
+  font-weight: 800;
+  font-family: "SF Mono", "Menlo", monospace;
+  color: #fff;
+}
+
+.mini-unit {
+  font-size: 9px;
+  color: #888;
+}
+
+.mini-gear {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: "SF Mono", "Menlo", monospace;
+  color: #fff;
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid #333;
+}
+
+.telemetry-status {
+  padding: 20px 10px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.telemetry-data {
+  padding: 10px;
+}
+
+/* ---- 儀表板 ---- */
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-center {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-speed {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.speed-number {
+  font-size: 28px;
+  font-weight: 800;
+  font-family: "SF Mono", "Menlo", monospace;
+  color: #fff;
+  line-height: 1;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+
+.speed-unit {
+  font-size: 9px;
+  color: #888;
+  margin-top: 1px;
+}
+
+/* 檔位 P R N D */
+.dashboard-gear {
+  display: flex;
+  gap: 12px;
+}
+
+.gear-letter {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: "SF Mono", "Menlo", monospace;
+  color: #333;
+}
+
+.gear-letter.gear-active {
+  color: #fff;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+}
+
+.gear-letter.gear-reverse {
+  color: var(--accent-red);
+  text-shadow: 0 0 6px rgba(233, 69, 96, 0.4);
+}
+
+/* ---- 方向燈 + 踏板 ---- */
+.tele-indicators {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.indicator {
+  font-size: 16px;
+  color: #2a2a2a;
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+}
+
+.indicator.indicator-on {
+  color: #f0c040;
+  text-shadow: 0 0 6px rgba(240, 192, 64, 0.6);
+  animation: blink 0.7s step-end infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0.2; }
+}
+
+.pedal-bars {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.pedal-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pedal-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  width: 22px;
+  flex-shrink: 0;
+}
+
+.pedal-track {
+  flex: 1;
+  height: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.pedal-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.15s ease-out;
+}
+
+.pedal-accel { background: var(--accent-cyan); }
+.pedal-brake { background: transparent; }
+.pedal-brake-on { background: var(--accent-red); }
+
+.pedal-pct {
+  font-size: 9px;
+  font-family: "SF Mono", "Menlo", monospace;
+  color: #888;
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.pedal-pct-warn {
+  color: var(--accent-red);
+}
+
+/* ---- 詳細資訊 ---- */
+.tele-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tele-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tele-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.tele-val {
+  font-size: 11px;
+  font-family: "SF Mono", "Menlo", monospace;
+  color: #ccc;
+}
+
+.tele-val-small {
+  font-size: 9px;
+}
+
+.tele-val-ap {
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.tele-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 8px 0;
+}

@@ -6,3 +6,4 @@ src-tauri/gen/
 *.log
 videosample/
 .claude/
+teslacam-*.mp4

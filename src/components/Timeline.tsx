@@ -7,21 +7,30 @@ interface TimelineProps {
   duration?: number;
   isPlaying: boolean;
   playbackRate: number;
+  markIn: number | null;
+  markOut: number | null;
   onSeek: (time: number) => void;
   onPlayPause: () => void;
   onPlaybackRateChange: (rate: number) => void;
+  onFrameStep: (direction: 1 | -1) => void;
+  onSetMarkIn: () => void;
+  onSetMarkOut: () => void;
+  onClearMarks: () => void;
 }
 
 const PLAYBACK_RATES = [0.5, 1, 1.5, 2, 4];
+const FPS = 36;
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
+  const f = Math.floor((seconds % 1) * FPS);
+  return `${m}:${String(s).padStart(2, "0")}:${String(f).padStart(2, "0")}`;
 }
 
-function formatTimestamp(iso: string): string {
+function formatTimestamp(iso: string, offsetSec: number): string {
   const d = new Date(iso);
+  d.setSeconds(d.getSeconds() + offsetSec);
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
   const ss = String(d.getSeconds()).padStart(2, "0");
@@ -34,9 +43,15 @@ export default function Timeline({
   duration: durationProp,
   isPlaying,
   playbackRate,
+  markIn,
+  markOut,
   onSeek,
   onPlayPause,
   onPlaybackRateChange,
+  onFrameStep,
+  onSetMarkIn,
+  onSetMarkOut,
+  onClearMarks,
 }: TimelineProps) {
   const duration = durationProp ?? event?.durationSec ?? 0;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -54,41 +69,100 @@ export default function Timeline({
     onPlaybackRateChange(next);
   };
 
-  // 計算目前絕對時間
-  const currentTimestamp = event
-    ? (() => {
-        const d = new Date(event.timestamp);
-        d.setSeconds(d.getSeconds() + currentTime);
-        return formatTimestamp(d.toISOString());
-      })()
-    : "--:--:--";
+  const currentTs = event ? formatTimestamp(event.timestamp, currentTime) : "--:--:--";
+  const hasMarks = markIn !== null || markOut !== null;
 
   return (
     <div className="timeline-area">
+      {/* 主控制列 */}
       <div className="timeline-controls">
+        <button className="tl-btn" onClick={() => onFrameStep(-1)} disabled={!event} title="上一幀">
+          ◄◄
+        </button>
         <button className="play-btn" onClick={onPlayPause} disabled={!event}>
           {isPlaying ? "⏸" : "▶"}
         </button>
-        <span className="time-display">
-          {currentTimestamp}
-        </span>
+        <button className="tl-btn" onClick={() => onFrameStep(1)} disabled={!event} title="下一幀">
+          ►►
+        </button>
+
+        <span className="time-display">{currentTs}</span>
         <span className="time-display time-elapsed">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
+
+        <div className="tl-spacer" />
+
+        {/* 標記控制 */}
+        <button
+          className={`tl-btn mark-btn ${markIn !== null ? "mark-active" : ""}`}
+          onClick={onSetMarkIn}
+          disabled={!event}
+          title="設定起點 [I]"
+        >
+          I
+        </button>
+        <button
+          className={`tl-btn mark-btn ${markOut !== null ? "mark-active" : ""}`}
+          onClick={onSetMarkOut}
+          disabled={!event}
+          title="設定終點 [O]"
+        >
+          O
+        </button>
+        {hasMarks && (
+          <button className="tl-btn" onClick={onClearMarks} title="清除標記">
+            ✕
+          </button>
+        )}
+
+        {hasMarks && (
+          <span className="mark-range">
+            {markIn !== null ? formatTime(markIn) : "起"}
+            {" → "}
+            {markOut !== null ? formatTime(markOut) : "終"}
+            {markIn !== null && markOut !== null && (
+              <span className="mark-duration">
+                ({formatTime(markOut - markIn)})
+              </span>
+            )}
+          </span>
+        )}
+
         <button className="speed-btn" onClick={cycleRate}>
           {playbackRate}x
         </button>
       </div>
+
+      {/* 時間軸 */}
       <div className="timeline-bar" onClick={handleBarClick}>
         <div className="timeline-track">
-          <div
-            className="timeline-progress"
-            style={{ width: `${progress}%` }}
-          />
-          <div
-            className="timeline-playhead"
-            style={{ left: `${progress}%` }}
-          />
+          {/* 標記範圍高亮 */}
+          {markIn !== null && markOut !== null && duration > 0 && (
+            <div
+              className="timeline-mark-range"
+              style={{
+                left: `${(markIn / duration) * 100}%`,
+                width: `${((markOut - markIn) / duration) * 100}%`,
+              }}
+            />
+          )}
+          {/* 起點標記 */}
+          {markIn !== null && duration > 0 && (
+            <div
+              className="timeline-mark timeline-mark-in"
+              style={{ left: `${(markIn / duration) * 100}%` }}
+            />
+          )}
+          {/* 終點標記 */}
+          {markOut !== null && duration > 0 && (
+            <div
+              className="timeline-mark timeline-mark-out"
+              style={{ left: `${(markOut / duration) * 100}%` }}
+            />
+          )}
+          <div className="timeline-progress" style={{ width: `${progress}%` }} />
+          <div className="timeline-playhead" style={{ left: `${progress}%` }} />
         </div>
       </div>
     </div>

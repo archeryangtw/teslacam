@@ -1,6 +1,7 @@
 mod commands;
 mod db;
 mod scanner;
+mod sei;
 
 use db::Database;
 use tauri::Manager;
@@ -35,6 +36,8 @@ pub fn run() {
             commands::get_events,
             commands::delete_event,
             commands::backup_event,
+            commands::parse_telemetry,
+            commands::export_surround_video,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

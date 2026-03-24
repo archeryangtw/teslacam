@@ -1,0 +1,12 @@
+.steering-wheel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.steering-svg {
+  width: 100%;
+  height: 100%;
+  /* 平滑跟隨，不要過度延遲 */
+  transition: transform 0.08s linear;
+}

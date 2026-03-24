@@ -129,3 +129,10 @@
   flex-direction: column;
   overflow: hidden;
 }
+
+.video-area {
+  flex: 1;
+  position: relative;
+  display: flex;
+  min-height: 0;
+}

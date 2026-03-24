@@ -19,6 +19,7 @@ export interface Clip {
   fileSize: number;
   durationSec: number;
   hasSei: boolean;
+  segmentIndex: number;
 }
 
 /** TeslaCam 事件 */

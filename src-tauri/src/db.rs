@@ -37,13 +37,14 @@ impl Database {
             );
 
             CREATE TABLE IF NOT EXISTS clips (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_id    INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-                camera      TEXT NOT NULL,
-                file_path   TEXT NOT NULL,
-                file_size   INTEGER,
-                duration_s  REAL,
-                has_sei     INTEGER DEFAULT 0
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id        INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                camera          TEXT NOT NULL,
+                file_path       TEXT NOT NULL,
+                file_size       INTEGER,
+                duration_s      REAL,
+                has_sei         INTEGER DEFAULT 0,
+                segment_index   INTEGER DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS telemetry (

@@ -1,11 +1,11 @@
 .sidebar {
-  width: 240px;
+  width: 220px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .sidebar-empty {
@@ -30,8 +30,15 @@
   color: #444;
 }
 
+/* 事件列表（可滾動） */
+.sidebar-events {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .sidebar-section {
-  padding: 12px 14px 8px;
+  padding: 10px 12px 6px;
 }
 
 .sidebar-title {
@@ -39,17 +46,17 @@
   text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 1px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .event-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 6px 8px;
+  border-radius: 5px;
   cursor: pointer;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
   transition: background 0.1s;
 }
 
@@ -59,8 +66,8 @@
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -75,7 +82,7 @@
 }
 
 .event-time {
-  font-size: 12px;
+  font-size: 11px;
   color: #ccc;
 }
 
@@ -87,11 +94,71 @@
   text-overflow: ellipsis;
 }
 
-.speed-badge {
-  font-size: 9px;
-  padding: 2px 5px;
-  border-radius: 3px;
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
+/* 事件資訊面板（固定在底部） */
+.sidebar-info {
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
   flex-shrink: 0;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+
+.info-key { color: var(--text-muted); }
+.info-value { color: #ccc; }
+.info-value.mono { font-family: "SF Mono", "Menlo", monospace; }
+
+.sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.action-btn {
+  padding: 6px;
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.action-btn:hover {
+  border-color: #444;
+  color: var(--text-primary);
+}
+
+.action-btn-danger {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.action-btn-danger:hover {
+  background: var(--accent-red-dim);
+}
+
+.confirm-group {
+  display: flex;
+  gap: 4px;
+}
+
+.confirm-group .action-btn {
+  flex: 1;
+}
+
+.action-btn-export {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.action-btn-export:hover {
+  background: var(--accent-cyan-dim);
 }

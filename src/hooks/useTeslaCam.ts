@@ -33,6 +33,7 @@ interface EventFromBackend {
     file_size: number;
     duration_sec: number;
     has_sei: boolean;
+    segment_index: number;
   }[];
 }
 
@@ -57,6 +58,7 @@ function mapEvent(e: EventFromBackend): TeslaCamEvent {
       fileSize: c.file_size,
       durationSec: c.duration_sec,
       hasSei: c.has_sei,
+      segmentIndex: c.segment_index,
     })),
   };
 }
