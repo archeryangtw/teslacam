@@ -72,11 +72,24 @@ Browse, replay, analyze, and export your TeslaCam videos with synchronized 6-cam
 
 ## Installation
 
-### Pre-built Binaries
+### Quick Install (Recommended)
 
-Download from the [Releases](https://github.com/archeryangtw/teslacam/releases) page.
+Go to the [Releases](https://github.com/archeryangtw/teslacam/releases) page and download the installer for your platform:
 
-### Build from Source
+| Platform | File | How to Install |
+|----------|------|----------------|
+| **macOS (Apple Silicon)** | `TeslaCam Manager_x.x.x_aarch64.dmg` | Open the `.dmg`, drag **TeslaCam Manager** into the **Applications** folder. If macOS says "unidentified developer", go to **System Settings > Privacy & Security** and click **Open Anyway**. |
+| **macOS (Intel)** | `TeslaCam Manager_x.x.x_x64.dmg` | Same as above. |
+| **Windows** | `TeslaCam Manager_x.x.x_x64-setup.exe` or `.msi` | Double-click to run the installer and follow the prompts. If Windows SmartScreen warns, click **More info > Run anyway**. |
+
+#### Installing ffmpeg (required for video export)
+
+The app works without ffmpeg for playback and analysis, but **video export** requires ffmpeg:
+
+- **macOS**: Open Terminal and run: `brew install ffmpeg` (requires [Homebrew](https://brew.sh/))
+- **Windows**: Download from [ffmpeg.org](https://ffmpeg.org/download.html), extract, and add the `bin` folder to your system PATH. Or run: `winget install Gyan.FFmpeg`
+
+### Build from Source (Advanced)
 
 **Prerequisites:**
 - [Node.js](https://nodejs.org/) 18+
@@ -271,11 +284,24 @@ MIT
 
 ## 安裝方式
 
-### 預編譯版本
+### 快速安裝（推薦）
 
-從 [Releases](https://github.com/archeryangtw/teslacam/releases) 頁面下載。
+到 [Releases](https://github.com/archeryangtw/teslacam/releases) 頁面下載對應你電腦的安裝檔：
 
-### 從原始碼編譯
+| 平台 | 檔案 | 安裝方式 |
+|------|------|----------|
+| **macOS (Apple Silicon)** | `TeslaCam Manager_x.x.x_aarch64.dmg` | 開啟 `.dmg`，將 **TeslaCam Manager** 拖入 **Applications** 資料夾。若 macOS 顯示「未識別的開發者」，請到 **系統設定 > 隱私權與安全性**，點擊 **強制開啟**。 |
+| **macOS (Intel)** | `TeslaCam Manager_x.x.x_x64.dmg` | 同上。 |
+| **Windows** | `TeslaCam Manager_x.x.x_x64-setup.exe` 或 `.msi` | 雙擊執行安裝程式，依提示操作。若 Windows SmartScreen 出現警告，點擊 **其他資訊 > 仍要執行**。 |
+
+#### 安裝 ffmpeg（匯出影片功能需要）
+
+不安裝 ffmpeg 也可以正常播放和分析影片，但**匯出影片**功能需要 ffmpeg：
+
+- **macOS**：打開終端機執行 `brew install ffmpeg`（需先安裝 [Homebrew](https://brew.sh/)）
+- **Windows**：從 [ffmpeg.org](https://ffmpeg.org/download.html) 下載，解壓縮後將 `bin` 資料夾加入系統 PATH。或執行 `winget install Gyan.FFmpeg`
+
+### 從原始碼編譯（進階）
 
 **前置需求：**
 - [Node.js](https://nodejs.org/) 18+
