@@ -5,6 +5,7 @@ import "./VideoGrid.css";
 
 export interface VideoGridHandle {
   frameStep: (direction: 1 | -1) => void;
+  getVideoRefs: () => Map<string, HTMLVideoElement>;
 }
 
 interface VideoGridProps {
@@ -67,7 +68,6 @@ const VideoGrid = forwardRef<VideoGridHandle, VideoGridProps>(function VideoGrid
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const isSyncing = useRef(false);
 
-  // 逐幀步進：前進或後退一個影格 (1/FPS 秒)
   useImperativeHandle(ref, () => ({
     frameStep(direction: 1 | -1) {
       const frontVideo = videoRefs.current.get("front");
@@ -75,11 +75,13 @@ const VideoGrid = forwardRef<VideoGridHandle, VideoGridProps>(function VideoGrid
       frontVideo.pause();
       const step = direction / FPS;
       frontVideo.currentTime = Math.max(0, frontVideo.currentTime + step);
-      // 同步其他鏡頭
       const t = frontVideo.currentTime;
       videoRefs.current.forEach((video, cam) => {
         if (cam !== "front") video.currentTime = t;
       });
+    },
+    getVideoRefs() {
+      return videoRefs.current;
     },
   }), []);
 

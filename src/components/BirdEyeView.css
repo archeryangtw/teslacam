@@ -1,0 +1,41 @@
+.birdeye-panel {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 280px;
+  background: rgba(12, 15, 28, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+}
+
+.birdeye-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.birdeye-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.birdeye-close:hover {
+  color: #fff;
+}
+
+.birdeye-canvas {
+  width: 100%;
+  display: block;
+}

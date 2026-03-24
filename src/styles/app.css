@@ -137,10 +137,9 @@
   min-height: 0;
 }
 
-.map-toggle-btn {
+.map-toggle-btn,
+.birdeye-toggle-btn {
   position: absolute;
-  bottom: 8px;
-  left: 8px;
   z-index: 10;
   width: 32px;
   height: 32px;
@@ -152,4 +151,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--text-muted);
+}
+
+.map-toggle-btn:hover,
+.birdeye-toggle-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.map-toggle-btn {
+  bottom: 8px;
+  left: 8px;
+}
+
+.birdeye-toggle-btn {
+  bottom: 8px;
+  right: 8px;
 }

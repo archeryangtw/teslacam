@@ -6,6 +6,7 @@ import VideoGrid, { type VideoGridHandle } from "./components/VideoGrid";
 import Timeline from "./components/Timeline";
 import TelemetryOverlay from "./components/TelemetryOverlay";
 import MapPanel from "./components/MapPanel";
+import BirdEyeView from "./components/BirdEyeView";
 import { useTeslaCam } from "./hooks/useTeslaCam";
 import type { TeslaCamEvent } from "./types/events";
 import "./styles/app.css";
@@ -30,6 +31,7 @@ function App() {
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showTelemetry, setShowTelemetry] = useState(true);
   const [showMap, setShowMap] = useState(true);
+  const [showBirdEye, setShowBirdEye] = useState(false);
   const [markIn, setMarkIn] = useState<number | null>(null);
   const [markOut, setMarkOut] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -218,6 +220,20 @@ function App() {
               visible={showMap && telemetryTrack.length > 0}
               onSelectEvent={handleSelectEvent}
             />
+            <BirdEyeView
+              videoRefs={videoGridRef.current?.getVideoRefs() ?? new Map()}
+              visible={showBirdEye && (selectedEvent?.clips.length ?? 0) > 0}
+              onToggle={() => setShowBirdEye(!showBirdEye)}
+            />
+            {(selectedEvent?.clips.length ?? 0) > 0 && !showBirdEye && (
+              <button
+                className="birdeye-toggle-btn"
+                onClick={() => setShowBirdEye(true)}
+                title="鳥瞰檢視"
+              >
+                ⊞
+              </button>
+            )}
             {telemetryTrack.length > 0 && !showMap && (
               <button
                 className="map-toggle-btn"
