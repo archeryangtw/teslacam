@@ -112,11 +112,6 @@ fn read_mp4_duration(path: &Path) -> Option<f64> {
     None
 }
 
-/// 公開版本供 commands 使用
-pub fn read_mp4_duration_pub(path: &str) -> Option<f64> {
-    read_mp4_duration(std::path::Path::new(path))
-}
-
 /// 計算兩個時間戳之間的秒數差
 fn timestamp_diff_seconds(ts_a: &str, ts_b: &str) -> f64 {
     // 格式 "2026-03-22_20-34-32"

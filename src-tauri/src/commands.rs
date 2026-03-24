@@ -3,7 +3,6 @@ use crate::event_detection;
 use crate::scanner;
 use crate::sei;
 use crate::telemetry_overlay;
-use chrono::TimeZone;
 use serde::Serialize;
 use tauri::State;
 
