@@ -251,7 +251,6 @@ pub fn generate_report(
 ) -> Result<String, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    // 取得事件資訊
     let (etype, timestamp, duration, source_dir): (String, String, i64, String) = conn
         .query_row(
             "SELECT type, timestamp, duration_s, source_dir FROM events WHERE id = ?1",
@@ -260,7 +259,6 @@ pub fn generate_report(
         )
         .map_err(|e| e.to_string())?;
 
-    // 取得片段數
     let clip_count: i64 = conn
         .query_row("SELECT COUNT(*) FROM clips WHERE event_id = ?1", [event_id], |row| row.get(0))
         .map_err(|e| e.to_string())?;
@@ -273,7 +271,69 @@ pub fn generate_report(
         .query_row("SELECT COALESCE(SUM(file_size), 0) FROM clips WHERE event_id = ?1", [event_id], |row| row.get(0))
         .map_err(|e| e.to_string())?;
 
-    // 取得 front 鏡頭的遙測摘要
+    let seg_count: i64 = conn
+        .query_row("SELECT COUNT(DISTINCT segment_index) FROM clips WHERE event_id = ?1", [event_id], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+
+    // 取得每段的時間戳（用 front 鏡頭的檔名推算）
+    let mut seg_stmt = conn
+        .prepare("SELECT DISTINCT segment_index, file_path, duration_s FROM clips WHERE event_id = ?1 AND camera = 'front' ORDER BY segment_index")
+        .map_err(|e| e.to_string())?;
+    let segments: Vec<(i64, String, f64)> = seg_stmt
+        .query_map([event_id], |row| Ok((row.get(0)?, row.get::<_, String>(1)?, row.get::<_, Option<f64>>(2)?.unwrap_or(60.0))))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // 從檔名提取時間戳
+    let extract_ts = |path: &str| -> String {
+        path.split('/').last().unwrap_or("")
+            .split('-').take(6).collect::<Vec<_>>().join("-")
+            .replace(".mp4", "")
+            .replacen('_', " ", 1)
+            .replacen('-', ":", 3) // 只替換時間部分的 -
+    };
+
+    // 哨兵事件的觸發時間 = source_dir 資料夾名
+    let trigger_time = source_dir.split('/').last().unwrap_or("")
+        .replacen('_', " ", 1)
+        .replacen('-', ":", 3);
+
+    let is_sentry = etype == "sentry";
+    let type_label = match etype.as_str() {
+        "sentry" => "哨兵模式",
+        "saved" => "手動保存",
+        _ => "行車紀錄",
+    };
+    let type_color = match etype.as_str() {
+        "sentry" => "#e94560",
+        "saved" => "#4ecdc4",
+        _ => "#888",
+    };
+
+    let size_mb = total_size as f64 / (1024.0 * 1024.0);
+
+    // 錄影時間軸
+    let mut timeline_html = String::new();
+    for (idx, (seg_idx, path, dur)) in segments.iter().enumerate() {
+        let seg_ts = extract_ts(path);
+        timeline_html.push_str(&format!(
+            "<tr><td>片段 {}</td><td>{}</td><td>{:.1} 秒</td></tr>",
+            seg_idx + 1, seg_ts, dur
+        ));
+        // 標記觸發點（哨兵的觸發時間通常是最後一段的開始附近）
+        if is_sentry && idx == segments.len() - 1 {
+            timeline_html.push_str(&format!(
+                "<tr style=\"background:#fff0f0;font-weight:bold\"><td colspan=\"3\">⚠ 哨兵觸發時間點：{}</td></tr>",
+                trigger_time
+            ));
+        }
+    }
+
+    // 遙測摘要（只對行車/手動保存有意義）
+    let mut telemetry_section = String::new();
+    let mut detected_section = String::new();
+
     let front_path: Option<String> = conn
         .query_row(
             "SELECT file_path FROM clips WHERE event_id = ?1 AND camera = 'front' AND segment_index = 0",
@@ -282,52 +342,74 @@ pub fn generate_report(
         )
         .ok();
 
-    let (mut max_speed, mut avg_speed, mut brake_count, mut detected_events_html) =
-        (0.0f32, 0.0f32, 0u32, String::new());
-
     if let Some(path) = &front_path {
         if let Ok(frames) = sei::parse_sei_from_file(path) {
-            if !frames.is_empty() {
-                let speeds: Vec<f32> = frames.iter().map(|f| f.speed_kmh).collect();
-                max_speed = speeds.iter().cloned().fold(0.0f32, f32::max);
-                avg_speed = speeds.iter().sum::<f32>() / speeds.len() as f32;
-                brake_count = frames.iter().filter(|f| f.brake).count() as u32;
-            }
+            let has_sei = !frames.is_empty();
+            let has_driving = frames.iter().any(|f| f.speed_kmh > 1.0);
 
-            let detected = event_detection::detect_events(&frames);
-            for de in &detected {
-                let severity_class = match de.severity {
-                    3 => "high",
-                    2 => "medium",
-                    _ => "low",
-                };
-                let mins = (de.time_sec / 60.0) as u32;
-                let secs = (de.time_sec % 60.0) as u32;
-                detected_events_html.push_str(&format!(
-                    "<tr class=\"{severity_class}\"><td>{mins}:{secs:02}</td><td>{}</td><td>{}</td></tr>",
-                    de.description, de.severity
-                ));
+            if has_sei && has_driving {
+                // 行車數據
+                let speeds: Vec<f32> = frames.iter().map(|f| f.speed_kmh).collect();
+                let max_speed = speeds.iter().cloned().fold(0.0f32, f32::max);
+                let avg_speed = speeds.iter().sum::<f32>() / speeds.len() as f32;
+                let brake_count = frames.iter().filter(|f| f.brake).count();
+
+                telemetry_section = format!(
+                    r#"<h2>駕駛數據摘要</h2>
+<div class="summary">
+  <div class="summary-card"><h3>最高車速</h3><div class="value">{max_speed:.0} km/h</div></div>
+  <div class="summary-card"><h3>平均車速</h3><div class="value">{avg_speed:.0} km/h</div></div>
+  <div class="summary-card"><h3>煞車次數</h3><div class="value">{brake_count}</div></div>
+</div>"#
+                );
+
+                let detected = event_detection::detect_events(&frames);
+                if !detected.is_empty() {
+                    let mut rows = String::new();
+                    for de in &detected {
+                        let cls = match de.severity { 3 => "high", 2 => "medium", _ => "low" };
+                        let m = (de.time_sec / 60.0) as u32;
+                        let s = (de.time_sec % 60.0) as u32;
+                        rows.push_str(&format!(
+                            "<tr class=\"{cls}\"><td>{m}:{s:02}</td><td>{}</td><td>{}</td></tr>",
+                            de.description, de.severity
+                        ));
+                    }
+                    detected_section = format!(
+                        "<h2>偵測到的事件</h2><table><tr><th>時間</th><th>描述</th><th>嚴重度</th></tr>{rows}</table>"
+                    );
+                }
+            } else if has_sei && !has_driving {
+                // 停車（哨兵）
+                let first_gps = frames.iter().find(|f| f.lat != 0.0);
+                let gps_text = first_gps
+                    .map(|f| format!("{:.6}, {:.6}", f.lat, f.lon))
+                    .unwrap_or_else(|| "無 GPS 資料".to_string());
+
+                telemetry_section = format!(
+                    r#"<h2>哨兵模式資訊</h2>
+<div class="summary">
+  <div class="summary-card"><h3>車輛狀態</h3><div class="value" style="font-size:20px">停車中 (P 檔)</div></div>
+  <div class="summary-card"><h3>GPS 位置</h3><div class="value" style="font-size:16px">{gps_text}</div></div>
+</div>
+<p style="color:#888">哨兵模式在停車狀態下觸發錄影，無行車數據。觸發原因可能為偵測到周邊移動物體或碰撞。</p>"#
+                );
+            } else {
+                telemetry_section = "<h2>遙測資料</h2><p style=\"color:#888\">此影片無 SEI 遙測資料（需韌體 2025.44.25+ / HW3+）</p>".to_string();
             }
         }
     }
-
-    let type_label = match etype.as_str() {
-        "sentry" => "哨兵模式",
-        "saved" => "手動保存",
-        _ => "行車紀錄",
-    };
-
-    let size_mb = total_size as f64 / (1024.0 * 1024.0);
 
     let html = format!(
         r#"<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<title>TeslaCam 事件報告</title>
+<title>TeslaCam 事件報告 — {type_label}</title>
 <style>
   body {{ font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; color: #333; }}
-  h1 {{ color: #e94560; border-bottom: 2px solid #e94560; padding-bottom: 8px; }}
+  h1 {{ color: {type_color}; border-bottom: 2px solid {type_color}; padding-bottom: 8px; }}
+  h2 {{ color: #555; margin-top: 28px; }}
   table {{ width: 100%; border-collapse: collapse; margin: 16px 0; }}
   th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
   th {{ background: #f5f5f5; }}
@@ -337,42 +419,42 @@ pub fn generate_report(
   .summary-card {{ background: #f9f9f9; border-radius: 8px; padding: 16px; }}
   .summary-card h3 {{ margin: 0 0 8px; font-size: 14px; color: #888; }}
   .summary-card .value {{ font-size: 28px; font-weight: 700; }}
-  .footer {{ margin-top: 40px; font-size: 12px; color: #999; text-align: center; }}
+  .badge {{ display: inline-block; padding: 2px 10px; border-radius: 4px; color: #fff; font-size: 13px; }}
+  .footer {{ margin-top: 40px; font-size: 12px; color: #999; text-align: center; border-top: 1px solid #eee; padding-top: 16px; }}
 </style>
 </head>
 <body>
 <h1>TeslaCam 事件報告</h1>
 
 <table>
-<tr><th>事件類型</th><td>{type_label}</td></tr>
-<tr><th>時間</th><td>{timestamp}</td></tr>
-<tr><th>時長</th><td>{} 分 {} 秒</td></tr>
+<tr><th>事件類型</th><td><span class="badge" style="background:{type_color}">{type_label}</span></td></tr>
+{sentry_trigger}
+<tr><th>錄影起始時間</th><td>{timestamp}</td></tr>
+<tr><th>總時長</th><td>{dur_min} 分 {dur_sec} 秒</td></tr>
 <tr><th>鏡頭數</th><td>{cam_count}</td></tr>
-<tr><th>片段數</th><td>{clip_count}</td></tr>
+<tr><th>片段數</th><td>{seg_count} 段（共 {clip_count} 個檔案）</td></tr>
 <tr><th>檔案大小</th><td>{size_mb:.1} MB</td></tr>
-<tr><th>來源路徑</th><td style="word-break:break-all;">{source_dir}</td></tr>
+<tr><th>來源路徑</th><td style="word-break:break-all;font-size:12px">{source_dir}</td></tr>
 </table>
 
-<h2>駕駛數據摘要</h2>
-<div class="summary">
-  <div class="summary-card"><h3>最高車速</h3><div class="value">{max_speed:.0} km/h</div></div>
-  <div class="summary-card"><h3>平均車速</h3><div class="value">{avg_speed:.0} km/h</div></div>
-  <div class="summary-card"><h3>煞車次數</h3><div class="value">{brake_count}</div></div>
-</div>
+<h2>錄影時間軸</h2>
+<table>
+<tr><th>片段</th><th>起始時間</th><th>時長</th></tr>
+{timeline_html}
+</table>
 
-<h2>偵測到的事件</h2>
-{detected_table}
+{telemetry_section}
+{detected_section}
 
 <div class="footer">
   由 TeslaCam Manager 自動生成 · {gen_time}
 </div>
 </body></html>"#,
-        duration / 60, duration % 60,
-        detected_table = if detected_events_html.is_empty() {
-            "<p>未偵測到特殊事件</p>".to_string()
-        } else {
-            format!("<table><tr><th>時間</th><th>描述</th><th>嚴重度</th></tr>{detected_events_html}</table>")
-        },
+        sentry_trigger = if is_sentry {
+            format!("<tr><th>⚠ 哨兵觸發時間</th><td style=\"color:#e94560;font-weight:bold\">{trigger_time}</td></tr>")
+        } else { String::new() },
+        dur_min = duration / 60,
+        dur_sec = duration % 60,
         gen_time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
     );
 
