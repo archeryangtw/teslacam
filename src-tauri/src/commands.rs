@@ -2,6 +2,7 @@ use crate::db::Database;
 use crate::event_detection;
 use crate::scanner;
 use crate::sei;
+use crate::telemetry_overlay;
 use chrono::TimeZone;
 use serde::Serialize;
 use tauri::State;
@@ -204,12 +205,12 @@ pub fn detect_events(file_path: String) -> Result<Vec<event_detection::DetectedE
 }
 
 /// 單段匯出：把一個 segment 的六鏡頭合併成環景影片
-/// `real_start_epoch` = 該段 trim_start 對應的 Unix 時間戳（秒）
 fn export_one_segment(
     cam_map: &std::collections::HashMap<String, String>,
     trim_start: f64,
     trim_end: f64,
     real_start_epoch: f64,
+    telemetry_frames: Option<&[sei::TelemetryFrame]>,
     output_path: &str,
 ) -> Result<(), String> {
     let cameras = [
@@ -253,11 +254,30 @@ fn export_one_segment(
     }
     fp.push("[top][bottom]vstack=inputs=2[out]".into());
 
-    // 顯示標準時間：basetime（微秒）+ pts 自動遞增
+    // 顯示標準時間
     let basetime_us = (real_start_epoch * 1_000_000.0) as i64;
     fp.push(format!(
-        "[out]drawtext=basetime={basetime_us}:text='%{{localtime\\:%Y-%m-%d %H\\:%M\\:%S}}':fontsize=24:fontcolor=white:borderw=2:bordercolor=black:x=10:y=10[final]"
+        "[out]drawtext=basetime={basetime_us}:text='%{{localtime\\:%Y-%m-%d %H\\:%M\\:%S}}':fontsize=24:fontcolor=white:borderw=2:bordercolor=black:x=10:y=10[timetext]"
     ));
+
+    // 如果有遙測資料，生成 ASS 字幕並疊加
+    let tmp_ass;
+    let video_w = if n >= 6 { cw * 3 } else { cw * 2 };
+    let video_h = ch * 2;
+
+    if let Some(frames) = telemetry_frames {
+        tmp_ass = std::env::temp_dir().join(format!("teslacam_tele_{}.ass", std::process::id()));
+        telemetry_overlay::generate_ass_overlay(
+            frames, trim_start, trim_end, &tmp_ass, video_w as u32, video_h as u32,
+        )?;
+        let ass_path = tmp_ass.to_string_lossy().to_string().replace('\\', "/").replace(':', "\\:");
+        fp.push(format!("[timetext]ass='{ass_path}'[final]"));
+    } else {
+        tmp_ass = std::path::PathBuf::new();
+        // 沒有遙測就直接用時間戳作為最終輸出
+        let last = fp.last_mut().unwrap();
+        *last = last.replace("[timetext]", "[final]");
+    }
 
     let filter = fp.join(";");
 
@@ -267,6 +287,11 @@ fn export_one_segment(
                "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-y", output_path])
         .output()
         .map_err(|e| format!("ffmpeg 失敗: {}", e))?;
+
+    // 清理暫存 ASS
+    if tmp_ass.exists() {
+        std::fs::remove_file(&tmp_ass).ok();
+    }
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -282,8 +307,10 @@ pub async fn export_surround_video(
     output_path: String,
     start_time: Option<f64>,
     end_time: Option<f64>,
+    with_telemetry: Option<bool>,
     db: State<'_, Database>,
 ) -> Result<String, String> {
+    let show_telemetry = with_telemetry.unwrap_or(true);
     // 讀取事件時間戳和所有 segment
     let (event_timestamp, segments): (String, Vec<(i64, std::collections::HashMap<String, String>, f64)>) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -360,12 +387,22 @@ pub async fn export_surround_video(
 
     log::info!("匯出: {:.1}s-{:.1}s, 共 {} 段", ss, ee, parts.len());
 
+    // 讀取每段的遙測資料（如果需要）
+    let seg_telemetry: Vec<Option<Vec<sei::TelemetryFrame>>> = if show_telemetry {
+        segments.iter().map(|(_, cams, _)| {
+            cams.get("front")
+                .and_then(|path| sei::parse_sei_from_file(path).ok())
+        }).collect()
+    } else {
+        segments.iter().map(|_| None).collect()
+    };
+
     if parts.len() == 1 {
         let (seg_i, ts, te) = parts[0];
         let real_epoch = event_epoch + seg_starts[seg_i] + ts;
-        export_one_segment(&segments[seg_i].1, ts, te, real_epoch, &output_path)?;
+        let tele = seg_telemetry[seg_i].as_deref();
+        export_one_segment(&segments[seg_i].1, ts, te, real_epoch, tele, &output_path)?;
     } else {
-        // 多段：各段匯出暫存檔 → concat 合併
         let tmp_dir = std::env::temp_dir().join("teslacam_export");
         std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
 
@@ -374,8 +411,9 @@ pub async fn export_surround_video(
             let tmp_path = tmp_dir.join(format!("part_{idx}.mp4"));
             let tmp_str = tmp_path.to_string_lossy().to_string();
             let real_epoch = event_epoch + seg_starts[*seg_i] + ts;
+            let tele = seg_telemetry[*seg_i].as_deref();
             log::info!("  段 {}: trim {:.3}-{:.3} → {}", seg_i, ts, te, tmp_str);
-            export_one_segment(&segments[*seg_i].1, *ts, *te, real_epoch, &tmp_str)?;
+            export_one_segment(&segments[*seg_i].1, *ts, *te, real_epoch, tele, &tmp_str)?;
             tmp_files.push(tmp_str);
         }
 

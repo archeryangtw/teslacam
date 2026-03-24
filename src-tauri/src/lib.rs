@@ -3,6 +3,7 @@ mod db;
 mod event_detection;
 mod scanner;
 mod sei;
+mod telemetry_overlay;
 
 use db::Database;
 use tauri::Manager;
