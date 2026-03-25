@@ -7,3 +7,4 @@ src-tauri/gen/
 videosample/
 .claude/
 teslacam-*.mp4
+.gstack/

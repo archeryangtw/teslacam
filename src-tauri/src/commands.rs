@@ -1,3 +1,4 @@
+use crate::analytics_engine;
 use crate::db::Database;
 use crate::event_detection;
 use crate::scanner;
@@ -712,4 +713,55 @@ pub async fn export_surround_video(
     }
 
     Ok(output_path)
+}
+
+// ── Analytics Commands ─────────────────────────────────────
+
+/// 計算車輛的駕駛分析數據
+#[tauri::command]
+pub fn compute_analytics(vehicle_id: i64, db: State<'_, Database>) -> Result<usize, String> {
+    analytics_engine::compute_analytics(vehicle_id, &db)
+}
+
+/// 取得行程列表
+#[tauri::command]
+pub fn get_trips(
+    vehicle_id: i64,
+    date_from: Option<String>,
+    date_to: Option<String>,
+    db: State<'_, Database>,
+) -> Result<Vec<analytics_engine::TripInfo>, String> {
+    analytics_engine::get_trips(&db, vehicle_id, date_from.as_deref(), date_to.as_deref())
+}
+
+/// 取得每日統計
+#[tauri::command]
+pub fn get_daily_stats(
+    vehicle_id: i64,
+    date_from: String,
+    date_to: String,
+    db: State<'_, Database>,
+) -> Result<Vec<analytics_engine::DailyStat>, String> {
+    analytics_engine::get_daily_stats(&db, vehicle_id, &date_from, &date_to)
+}
+
+/// 取得期間摘要（含與前期比較）
+#[tauri::command]
+pub fn get_period_summary(
+    vehicle_id: i64,
+    period: String,
+    db: State<'_, Database>,
+) -> Result<analytics_engine::PeriodSummary, String> {
+    analytics_engine::get_period_summary(&db, vehicle_id, &period)
+}
+
+/// 取得熱力圖 GPS 資料
+#[tauri::command]
+pub fn get_heatmap_data(
+    vehicle_id: i64,
+    date_from: Option<String>,
+    date_to: Option<String>,
+    db: State<'_, Database>,
+) -> Result<Vec<analytics_engine::HeatmapPoint>, String> {
+    analytics_engine::get_heatmap_data(&db, vehicle_id, date_from.as_deref(), date_to.as_deref())
 }

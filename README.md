@@ -2,7 +2,7 @@
 
 A cross-platform desktop application for managing Tesla dashcam footage. Built with [Tauri](https://tauri.app/) (Rust + React + TypeScript).
 
-Browse, replay, analyze, and export your TeslaCam videos with synchronized 6-camera surround playback, real-time telemetry overlay, GPS tracking, and intelligent event detection.
+Browse, replay, analyze, and export your TeslaCam videos with synchronized 6-camera surround playback, real-time telemetry overlay, GPS tracking, intelligent event detection, and a driving analytics dashboard with trip statistics and driving score.
 
 ## Features
 
@@ -47,6 +47,18 @@ Browse, replay, analyze, and export your TeslaCam videos with synchronized 6-cam
 - **Standard Timestamp Watermark** — Real recording time (not relative)
 - **Telemetry Overlay** — Speed, gear, steering, throttle/brake burned into the export via ASS subtitles
 - **Event Report** — HTML report with driving summary, max/avg speed, detected events; Sentry reports show trigger time, timeline, GPS location, and parked status
+
+### Driving Analytics Dashboard
+- **Trip Detection** — Automatically identifies driving trips from RecentClips using SEI telemetry (gear, speed, duration)
+- **Period Summary** — View total distance, drive time, trip count, and detected events for the week, month, or all time
+- **Period Comparison** — Percentage delta vs. previous period (e.g., +12% distance vs. last week)
+- **Daily Distance Chart** — Bar chart showing distance driven per day
+- **Event Breakdown** — Donut chart of hard brakes, hard accelerations, sharp turns, and other events
+- **Trip List** — Each trip shows distance, duration, avg/max speed, and color-coded event dots
+- **Driving Score** — 0–100 composite score across 4 dimensions: smooth braking, steady acceleration, smooth cornering, and speed compliance
+- **Route Heatmap (placeholder)** — GPS points stored for future MapLibre GL heatmap visualization
+- **Distance Calculation** — GPS-based with speed-integration cross-validation; filters invalid GPS (tunnels, garages)
+- **Shareable** — Designed for screenshot-sharing in Tesla owner communities
 
 ### Management
 - **Multi-Vehicle Support** — Add, switch, and remove multiple Tesla vehicles via dropdown
@@ -177,6 +189,7 @@ pnpm tauri build      # Production build (outputs .deb / .AppImage)
 | Map | MapLibre GL JS + OpenStreetMap |
 | Database | SQLite (rusqlite) |
 | SEI Parser | Custom Rust parser (protobuf via prost) |
+| Charts | Recharts |
 | Video Export | ffmpeg (system-installed) |
 | i18n | react-i18next (zh-TW / en) |
 
@@ -197,6 +210,8 @@ src-tauri/              # Backend (Rust)
     scanner.rs           # TeslaCam folder scanner
     sei.rs               # H.264 SEI metadata parser
     event_detection.rs   # Rule-based event detection
+    analytics_engine.rs  # Driving analytics (trips, scores, aggregation)
+    analytics_db.rs      # Analytics schema migration
     telemetry_overlay.rs # ASS subtitle generation for export
 ```
 
@@ -214,7 +229,7 @@ MIT
 
 跨平台 Tesla 行車紀錄管理桌面應用程式。使用 [Tauri](https://tauri.app/)（Rust + React + TypeScript）開發。
 
-瀏覽、重播、分析、匯出你的 TeslaCam 影片——六鏡頭同步環景播放、即時遙測資料覆蓋、GPS 軌跡追蹤、智慧事件偵測。
+瀏覽、重播、分析、匯出你的 TeslaCam 影片——六鏡頭同步環景播放、即時遙測資料覆蓋、GPS 軌跡追蹤、智慧事件偵測、駕駛分析儀表板（行程統計與駕駛評分）。
 
 ## 功能特色
 
@@ -259,6 +274,18 @@ MIT
 - **標準時間水印** — 顯示真實錄影時間
 - **遙測覆蓋** — 車速、檔位、方向盤、油門/煞車燒錄到匯出影片
 - **事件報告** — HTML 報告：行車事件含駕駛摘要與偵測事件；哨兵事件含觸發時間、錄影時間軸、GPS 位置、停車狀態
+
+### 駕駛分析儀表板
+- **行程偵測** — 從 RecentClips 的 SEI 遙測資料（檔位、車速、時長）自動識別行車行程
+- **期間摘要** — 查看本週、本月或全部時間的總里程、駕駛時間、行程數、偵測事件數
+- **期間比較** — 與前期百分比差異（例如：vs 上週 +12% 里程）
+- **每日里程圖表** — 長條圖顯示每天行駛里程
+- **事件分布** — 甜甜圈圖呈現急煞車、急加速、急轉彎及其他事件比例
+- **行程列表** — 每趟行程顯示里程、時間、平均/最高車速、彩色事件標記
+- **駕駛評分** — 0–100 綜合評分，涵蓋四個面向：平穩煞車、平穩加速、平穩過彎、速度合規
+- **路線熱力圖（預留）** — GPS 點已儲存，未來將整合 MapLibre GL 熱力圖顯示
+- **距離計算** — GPS 定位搭配速度積分交叉驗證；過濾無效 GPS（隧道、地下停車場）
+- **可分享** — 專為截圖分享到 Tesla 車主社群而設計
 
 ### 管理
 - **多車管理** — 新增、切換、刪除不同 Tesla 車輛

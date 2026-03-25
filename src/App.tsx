@@ -7,6 +7,7 @@ import Timeline from "./components/Timeline";
 import TelemetryOverlay from "./components/TelemetryOverlay";
 import MapPanel from "./components/MapPanel";
 import BirdEyeView from "./components/BirdEyeView";
+import AnalyticsPage from "./components/AnalyticsPage";
 import { useTeslaCam } from "./hooks/useTeslaCam";
 import type { TeslaCamEvent } from "./types/events";
 import "./styles/app.css";
@@ -39,6 +40,7 @@ function App() {
   const [markIn, setMarkIn] = useState<number | null>(null);
   const [markOut, setMarkOut] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   const handleReport = useCallback(async (eventId: number) => {
     try {
@@ -267,6 +269,13 @@ function App() {
               ))}
             </select>
           )}
+          <button
+            className={`btn ${showAnalytics ? "btn-active" : ""}`}
+            onClick={() => setShowAnalytics(!showAnalytics)}
+            title="駕駛分析"
+          >
+            {showAnalytics ? "返回播放" : "駕駛分析"}
+          </button>
           <button className="btn" onClick={selectAndScan} disabled={scanning}>
             {rootDir ? "重新掃描" : "新增車輛"}
           </button>
@@ -289,6 +298,10 @@ function App() {
         />
 
         <div className="center-panel">
+          {showAnalytics ? (
+            <AnalyticsPage vehicleId={activeVehicleId} visible={showAnalytics} />
+          ) : (
+          <>
           <div className="video-area">
             <VideoGrid
               ref={videoGridRef}
@@ -359,6 +372,8 @@ function App() {
             onSetMarkOut={handleSetMarkOut}
             onClearMarks={handleClearMarks}
           />
+          </>
+          )}
         </div>
       </div>
     </div>

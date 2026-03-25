@@ -1,3 +1,5 @@
+mod analytics_db;
+mod analytics_engine;
 mod commands;
 mod db;
 mod event_detection;
@@ -45,6 +47,11 @@ pub fn run() {
             commands::get_vehicles,
             commands::add_vehicle,
             commands::delete_vehicle,
+            commands::compute_analytics,
+            commands::get_trips,
+            commands::get_daily_stats,
+            commands::get_period_summary,
+            commands::get_heatmap_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

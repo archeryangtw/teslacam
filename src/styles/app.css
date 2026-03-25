@@ -71,6 +71,11 @@
   border-color: #444;
   color: var(--text-primary);
 }
+.btn.btn-active {
+  background: #5b5bbd;
+  border-color: #5b5bbd;
+  color: #fff;
+}
 
 .vehicle-select {
   padding: 4px 8px;

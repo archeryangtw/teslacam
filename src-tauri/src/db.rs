@@ -1,3 +1,4 @@
+use crate::analytics_db;
 use rusqlite::{Connection, Result};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -11,10 +12,23 @@ impl Database {
         std::fs::create_dir_all(&app_dir).ok();
         let db_path = app_dir.join("teslacam.db");
         let conn = Connection::open(db_path)?;
+
+        // 啟用 WAL mode 以改善並發讀寫
+        conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+
         let db = Self {
             conn: Mutex::new(conn),
         };
         db.init_tables()?;
+
+        // 執行 schema 遷移
+        {
+            let conn = db.conn.lock().unwrap();
+            analytics_db::migrate(&conn).unwrap_or_else(|e| {
+                log::warn!("Analytics schema migration warning: {}", e);
+            });
+        }
+
         Ok(db)
     }
 
