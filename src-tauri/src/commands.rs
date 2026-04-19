@@ -5,7 +5,76 @@ use crate::scanner;
 use crate::sei;
 use crate::telemetry_overlay;
 use serde::Serialize;
+use std::sync::OnceLock;
 use tauri::State;
+
+/// 找 ffmpeg binary：優先用專案內靜態版（含 libass/libfreetype），fallback 系統 ffmpeg。
+/// 搜尋順序：TESLACAM_FFMPEG 環境變數 → dev 模式 src-tauri/bin → 安裝後的 bundle resource → PATH。
+fn ffmpeg_bin() -> String {
+    static CACHE: OnceLock<String> = OnceLock::new();
+    let bin_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+    CACHE
+        .get_or_init(|| {
+            if let Ok(p) = std::env::var("TESLACAM_FFMPEG") {
+                if std::path::Path::new(&p).exists() {
+                    return p;
+                }
+            }
+            if let Ok(exe) = std::env::current_exe() {
+                let parent = exe.parent();
+                let candidates: Vec<std::path::PathBuf> = [
+                    // dev: target/debug/teslacam-manager → ../../bin/ffmpeg
+                    parent
+                        .and_then(|p| p.parent())
+                        .and_then(|p| p.parent())
+                        .map(|p| p.join("bin").join(bin_name)),
+                    // Windows installed: <install>/ffmpeg.exe 或 <install>/resources/bin/ffmpeg.exe
+                    parent.map(|p| p.join(bin_name)),
+                    parent.map(|p| p.join("resources").join("bin").join(bin_name)),
+                    parent.map(|p| p.join("resources").join("_up_").join("bin").join(bin_name)),
+                    // macOS .app bundle: Contents/MacOS/<bin> → Contents/Resources/...
+                    parent
+                        .and_then(|p| p.parent())
+                        .map(|p| p.join("Resources").join("bin").join(bin_name)),
+                    parent
+                        .and_then(|p| p.parent())
+                        .map(|p| p.join("Resources").join("_up_").join("bin").join(bin_name)),
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
+                for c in &candidates {
+                    if c.exists() {
+                        return c.to_string_lossy().to_string();
+                    }
+                }
+            }
+            bin_name.to_string()
+        })
+        .clone()
+}
+
+/// 偵測 ffmpeg 有哪些 overlay filter 可用
+fn ffmpeg_filters() -> &'static (bool /* drawtext */, bool /* ass */) {
+    static CACHE: OnceLock<(bool, bool)> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let out = std::process::Command::new(ffmpeg_bin())
+            .args(["-hide_banner", "-filters"])
+            .output();
+        if let Ok(o) = out {
+            let s = String::from_utf8_lossy(&o.stdout);
+            // filter 列表格式每行: " T. drawtext           V->V       Draw text..."
+            let has_drawtext = s.lines().any(|l| l.split_whitespace().nth(1) == Some("drawtext"));
+            let has_ass = s.lines().any(|l| {
+                let f = l.split_whitespace().nth(1);
+                f == Some("ass") || f == Some("subtitles")
+            });
+            (has_drawtext, has_ass)
+        } else {
+            (false, false)
+        }
+    })
+}
 
 #[derive(Debug, Serialize)]
 pub struct EventResponse {
@@ -469,7 +538,8 @@ pub fn detect_events(file_path: String) -> Result<Vec<event_detection::DetectedE
     Ok(event_detection::detect_events(&raw_frames))
 }
 
-/// 單段匯出：把一個 segment 的六鏡頭合併成環景影片
+/// 單段匯出：把一個 segment 的六鏡頭合併成環景影片，
+/// 或當 only_camera 指定時只匯出該鏡頭
 fn export_one_segment(
     cam_map: &std::collections::HashMap<String, String>,
     trim_start: f64,
@@ -477,76 +547,113 @@ fn export_one_segment(
     real_start_epoch: f64,
     telemetry_frames: Option<&[sei::TelemetryFrame]>,
     output_path: &str,
+    only_camera: Option<&str>,
 ) -> Result<(), String> {
-    let cameras = [
-        "left_pillar", "front", "right_pillar",
-        "left_repeater", "back", "right_repeater",
-    ];
     let mut input_args = Vec::new();
-    let mut input_cams = Vec::new();
+    let mut input_cams: Vec<&str> = Vec::new();
 
-    for cam in &cameras {
-        if let Some(path) = cam_map.get(*cam) {
-            input_args.push("-i".to_string());
-            input_args.push(path.clone());
-            input_cams.push(*cam);
+    if let Some(cam) = only_camera {
+        let path = cam_map
+            .get(cam)
+            .ok_or_else(|| format!("找不到鏡頭 {cam} 的影片"))?;
+        input_args.push("-i".to_string());
+        input_args.push(path.clone());
+        input_cams.push(cam);
+    } else {
+        let cameras = [
+            "left_pillar", "front", "right_pillar",
+            "left_repeater", "back", "right_repeater",
+        ];
+        for c in &cameras {
+            if let Some(path) = cam_map.get(*c) {
+                input_args.push("-i".to_string());
+                input_args.push(path.clone());
+                input_cams.push(*c);
+            }
         }
-    }
-
-    if input_cams.len() < 4 {
-        return Err("至少需要 4 個鏡頭".to_string());
+        if input_cams.len() < 4 {
+            return Err("至少需要 4 個鏡頭".to_string());
+        }
     }
 
     let n = input_cams.len();
-    let (cw, ch) = (640, 480);
     let mut fp = Vec::new();
+    let video_w: i32;
+    let video_h: i32;
 
-    for i in 0..n {
-        let trim = format!("trim=start={trim_start:.3}:end={trim_end:.3},setpts=PTS-STARTPTS");
-        if input_cams[i] == "back" {
-            fp.push(format!("[{i}:v]{trim},scale={cw}:{ch},hflip[v{i}]"));
+    let trim = format!("trim=start={trim_start:.3}:end={trim_end:.3},setpts=PTS-STARTPTS");
+
+    if only_camera.is_some() {
+        // 單鏡頭：保留原始解析度（Tesla 影片預設 1280x960）
+        video_w = 1280;
+        video_h = 960;
+        if input_cams[0] == "back" {
+            fp.push(format!("[0:v]{trim},scale={video_w}:{video_h},hflip[out]"));
         } else {
-            fp.push(format!("[{i}:v]{trim},scale={cw}:{ch}[v{i}]"));
+            fp.push(format!("[0:v]{trim},scale={video_w}:{video_h}[out]"));
         }
-    }
-
-    if n >= 6 {
-        fp.push("[v0][v1][v2]hstack=inputs=3[top]".into());
-        fp.push("[v3][v4][v5]hstack=inputs=3[bottom]".into());
     } else {
-        fp.push("[v0][v1]hstack=inputs=2[top]".into());
-        fp.push("[v2][v3]hstack=inputs=2[bottom]".into());
+        let (cw, ch) = (640, 480);
+        for i in 0..n {
+            if input_cams[i] == "back" {
+                fp.push(format!("[{i}:v]{trim},scale={cw}:{ch},hflip[v{i}]"));
+            } else {
+                fp.push(format!("[{i}:v]{trim},scale={cw}:{ch}[v{i}]"));
+            }
+        }
+        if n >= 6 {
+            fp.push("[v0][v1][v2]hstack=inputs=3[top]".into());
+            fp.push("[v3][v4][v5]hstack=inputs=3[bottom]".into());
+        } else {
+            fp.push("[v0][v1]hstack=inputs=2[top]".into());
+            fp.push("[v2][v3]hstack=inputs=2[bottom]".into());
+        }
+        fp.push("[top][bottom]vstack=inputs=2[out]".into());
+        video_w = if n >= 6 { cw * 3 } else { cw * 2 };
+        video_h = ch * 2;
     }
-    fp.push("[top][bottom]vstack=inputs=2[out]".into());
 
-    // 顯示標準時間：pts + epoch → localtime（預設格式 YYYY-MM-DD HH:MM:SS）
-    let epoch_sec = real_start_epoch as i64;
-    fp.push(format!(
-        "[out]drawtext=text='%{{pts\\:localtime\\:{epoch_sec}}}':fontsize=24:fontcolor=white:borderw=2:bordercolor=black:x=10:y=10[timetext]"
-    ));
+    // 偵測 ffmpeg 可用 filter（libfreetype → drawtext, libass → ass）
+    let (has_drawtext, has_ass) = *ffmpeg_filters();
 
-    // 如果有遙測資料，生成 ASS 字幕並疊加
+    // 時間戳（drawtext）— 沒有 libfreetype 就跳過
+    if has_drawtext {
+        let epoch_sec = real_start_epoch as i64;
+        fp.push(format!(
+            "[out]drawtext=text='%{{pts\\:localtime\\:{epoch_sec}}}':fontsize=24:fontcolor=white:borderw=2:bordercolor=black:x=10:y=10[timetext]"
+        ));
+    }
+
+    // 遙測字幕（ass）— 沒有 libass 就跳過
     let tmp_ass;
-    let video_w = if n >= 6 { cw * 3 } else { cw * 2 };
-    let video_h = ch * 2;
-
-    if let Some(frames) = telemetry_frames {
+    let want_tele_overlay = telemetry_frames.is_some() && has_ass;
+    if want_tele_overlay {
+        let frames = telemetry_frames.unwrap();
         tmp_ass = std::env::temp_dir().join(format!("teslacam_tele_{}.ass", std::process::id()));
         telemetry_overlay::generate_ass_overlay(
             frames, trim_start, trim_end, &tmp_ass, video_w as u32, video_h as u32,
         )?;
-        let ass_path = tmp_ass.to_string_lossy().to_string().replace('\\', "/").replace(':', "\\:");
-        fp.push(format!("[timetext]ass='{ass_path}'[final]"));
+        let raw = tmp_ass.to_string_lossy().to_string().replace('\\', "/");
+        let ass_path = raw
+            .replace('\\', "\\\\")
+            .replace(':', "\\:")
+            .replace('\'', "\\'");
+        let input_label = if has_drawtext { "[timetext]" } else { "[out]" };
+        fp.push(format!("{input_label}ass=filename={ass_path}[final]"));
     } else {
         tmp_ass = std::path::PathBuf::new();
-        // 沒有遙測就直接用時間戳作為最終輸出
+        // 沒有任何文字疊加 → 把最後一個 filter 的輸出 label 改為 [final]
         let last = fp.last_mut().unwrap();
-        *last = last.replace("[timetext]", "[final]");
+        if has_drawtext {
+            *last = last.replace("[timetext]", "[final]");
+        } else {
+            *last = last.replace("[out]", "[final]");
+        }
     }
 
     let filter = fp.join(";");
 
-    let output = std::process::Command::new("ffmpeg")
+    let output = std::process::Command::new(ffmpeg_bin())
         .args(&input_args)
         .args(&["-filter_complex", &filter, "-map", "[final]",
                "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-y", output_path])
@@ -560,12 +667,16 @@ fn export_one_segment(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("ffmpeg 錯誤: {}", stderr.chars().take(500).collect::<String>()));
+        // 取最後 1500 字（真正的錯誤通常在尾端；前面都是版本/設定）
+        let s: String = stderr.to_string();
+        let tail_start = s.char_indices().rev().nth(1500).map(|(i, _)| i).unwrap_or(0);
+        return Err(format!("ffmpeg 錯誤: {}", &s[tail_start..]));
     }
     Ok(())
 }
 
-/// 匯出六鏡頭合併影片，支援跨段時間範圍
+/// 匯出影片，支援跨段時間範圍。
+/// camera = None → 六鏡頭合併環景；camera = Some("front") → 只匯出指定單一鏡頭。
 #[tauri::command]
 pub async fn export_surround_video(
     event_id: i64,
@@ -573,9 +684,11 @@ pub async fn export_surround_video(
     start_time: Option<f64>,
     end_time: Option<f64>,
     with_telemetry: Option<bool>,
+    camera: Option<String>,
     db: State<'_, Database>,
 ) -> Result<String, String> {
     let show_telemetry = with_telemetry.unwrap_or(true);
+    let only_cam = camera.as_deref();
     // 讀取事件時間戳和所有 segment
     let (event_timestamp, segments): (String, Vec<(i64, std::collections::HashMap<String, String>, f64)>) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -666,7 +779,7 @@ pub async fn export_surround_video(
         let (seg_i, ts, te) = parts[0];
         let real_epoch = event_epoch + seg_starts[seg_i] + ts;
         let tele = seg_telemetry[seg_i].as_deref();
-        export_one_segment(&segments[seg_i].1, ts, te, real_epoch, tele, &output_path)?;
+        export_one_segment(&segments[seg_i].1, ts, te, real_epoch, tele, &output_path, only_cam)?;
     } else {
         let tmp_dir = std::env::temp_dir().join("teslacam_export");
         std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
@@ -678,7 +791,7 @@ pub async fn export_surround_video(
             let real_epoch = event_epoch + seg_starts[*seg_i] + ts;
             let tele = seg_telemetry[*seg_i].as_deref();
             log::info!("  段 {}: trim {:.3}-{:.3} → {}", seg_i, ts, te, tmp_str);
-            export_one_segment(&segments[*seg_i].1, *ts, *te, real_epoch, tele, &tmp_str)?;
+            export_one_segment(&segments[*seg_i].1, *ts, *te, real_epoch, tele, &tmp_str, only_cam)?;
             tmp_files.push(tmp_str);
         }
 
@@ -692,7 +805,7 @@ pub async fn export_surround_video(
         std::fs::write(&list_path, &list_content).map_err(|e| e.to_string())?;
 
         // ffmpeg concat
-        let output = std::process::Command::new("ffmpeg")
+        let output = std::process::Command::new(ffmpeg_bin())
             .args(&[
                 "-f", "concat", "-safe", "0",
                 "-i", &list_path.to_string_lossy(),

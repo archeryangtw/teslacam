@@ -25,7 +25,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Speed,SF Mono,48,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,0,7,20,20,20,1
+Style: Gps,SF Mono,24,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,0,7,20,20,55,1
 Style: Info,SF Mono,24,&H00CCCCCC,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,0,1,20,20,20,1
 Style: Gear,SF Mono,36,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,0,9,20,20,20,1
 Style: Brake,SF Mono,28,&H004560E9,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2,0,3,20,20,20,1
@@ -53,13 +53,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         let start = format_ass_time(rel_time);
         let end = format_ass_time(rel_time + 0.5);
 
-        // 速度（左上）
-        writeln!(
-            file,
-            "Dialogue: 0,{start},{end},Speed,,0,0,0,,{:.0} km/h",
-            frame.speed_kmh
-        )
-        .ok();
+        // GPS 經緯度（左上，接在 drawtext 時間戳下方）
+        if frame.lat != 0.0 || frame.lon != 0.0 {
+            writeln!(
+                file,
+                "Dialogue: 0,{start},{end},Gps,,0,0,0,,{:.6}, {:.6}",
+                frame.lat, frame.lon
+            )
+            .ok();
+        }
 
         // 檔位（右上）
         let gear_color = if frame.gear == "R" { "\\c&H004560E9&" } else { "" };

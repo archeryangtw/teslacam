@@ -1,6 +1,16 @@
 import { useRef, useEffect, useCallback, useMemo, useState, forwardRef, useImperativeHandle } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import type { Clip, CameraAngle } from "../types/events";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
+import type { Clip, CameraAngle, TeslaCamEvent } from "../types/events";
+
+interface TelemetryFrame {
+  time_sec: number;
+  lat: number;
+  lon: number;
+  speed_kmh: number;
+  heading: number;
+}
 import "./VideoGrid.css";
 
 export interface VideoGridHandle {
@@ -17,6 +27,9 @@ interface VideoGridProps {
   playbackRate: number;
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
+  event?: TeslaCamEvent | null;
+  telemetryTrack?: TelemetryFrame[];
+  onExportCamera?: (camera: CameraAngle) => void;
 }
 
 const CAMERA_LABELS: Record<CameraAngle, string> = {
@@ -64,6 +77,9 @@ const VideoGrid = forwardRef<VideoGridHandle, VideoGridProps>(function VideoGrid
   playbackRate,
   onTimeUpdate,
   onDurationChange,
+  event,
+  telemetryTrack,
+  onExportCamera,
 }: VideoGridProps, ref) {
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const isSyncing = useRef(false);
@@ -92,6 +108,109 @@ const VideoGrid = forwardRef<VideoGridHandle, VideoGridProps>(function VideoGrid
   const [segmentIndexes, setSegmentIndexes] = useState<Map<string, number>>(
     new Map()
   );
+
+  // 雙擊放大的鏡頭；null = 六鏡頭環景
+  const [zoomedCamera, setZoomedCamera] = useState<string | null>(null);
+
+  // clips 切換（換事件）時重設放大狀態，避免放大到不存在的鏡頭
+  useEffect(() => {
+    setZoomedCamera(null);
+  }, [cameraSegments]);
+
+  const handleCamDoubleClick = useCallback((camera: string) => {
+    setZoomedCamera((prev) => (prev === camera ? null : camera));
+  }, []);
+
+  const handleSnapshot = useCallback(async () => {
+    if (!zoomedCamera) return;
+    const video = videoRefs.current.get(zoomedCamera);
+    if (!video || !video.videoWidth) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // 先畫影片畫面（後鏡頭要翻轉成正向）
+    if (zoomedCamera === "back") {
+      ctx.save();
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0);
+      ctx.restore();
+    } else {
+      ctx.drawImage(video, 0, 0);
+    }
+
+    // 疊上時間戳 + GPS
+    const lines: string[] = [];
+    if (event) {
+      const iso = event.timestamp;
+      const d = new Date(iso.includes("+") || iso.includes("Z") ? iso : iso + "+08:00");
+      d.setSeconds(d.getSeconds() + Math.floor(currentTime));
+      const pad = (n: number) => String(n).padStart(2, "0");
+      lines.push(
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+        `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+      );
+    }
+    if (telemetryTrack && telemetryTrack.length > 0) {
+      // 找最接近 currentTime 的 GPS 點
+      let closest = telemetryTrack[0];
+      let minDt = Math.abs(closest.time_sec - currentTime);
+      for (const p of telemetryTrack) {
+        const dt = Math.abs(p.time_sec - currentTime);
+        if (dt < minDt) {
+          minDt = dt;
+          closest = p;
+        }
+      }
+      if (closest.lat !== 0 || closest.lon !== 0) {
+        lines.push(`${closest.lat.toFixed(6)}, ${closest.lon.toFixed(6)}`);
+      }
+    }
+
+    if (lines.length > 0) {
+      const fs = Math.max(18, Math.round(canvas.height / 32));
+      ctx.font = `bold ${fs}px -apple-system, "Helvetica Neue", sans-serif`;
+      ctx.textBaseline = "top";
+      const pad2 = Math.round(fs * 0.4);
+      const lineH = fs + Math.round(fs * 0.25);
+      const boxW = Math.max(...lines.map((l) => ctx.measureText(l).width)) + pad2 * 2;
+      const boxH = lineH * lines.length + pad2 * 2 - Math.round(fs * 0.25);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+      ctx.fillRect(12, 12, boxW, boxH);
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = "rgba(0,0,0,0.8)";
+      ctx.shadowBlur = 2;
+      lines.forEach((l, i) => {
+        ctx.fillText(l, 12 + pad2, 12 + pad2 + i * lineH);
+      });
+      ctx.shadowBlur = 0;
+    }
+
+    const blob: Blob | null = await new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/png")
+    );
+    if (!blob) return;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const defaultPath = `teslacam-${zoomedCamera}-${ts}.png`;
+    try {
+      const selected = await saveDialog({
+        title: "儲存截圖",
+        defaultPath,
+        filters: [{ name: "PNG", extensions: ["png"] }],
+      });
+      if (!selected) return;
+      await writeFile(selected, bytes);
+      alert(`截圖已儲存：${selected}`);
+    } catch (e) {
+      alert(`截圖失敗：${e}`);
+    }
+  }, [zoomedCamera, event, currentTime, telemetryTrack]);
 
   // 當 clips 改變時重設 segment indexes
   useEffect(() => {
@@ -252,21 +371,45 @@ const VideoGrid = forwardRef<VideoGridHandle, VideoGridProps>(function VideoGrid
 
   const availableCameras = GRID_ORDER.filter((cam) => cameraSegments.has(cam));
 
+  const isZoomed = zoomedCamera !== null && availableCameras.includes(zoomedCamera as CameraAngle);
+
   return (
-    <div className={`video-grid grid-${availableCameras.length}`}>
+    <div className={`video-grid grid-${availableCameras.length}${isZoomed ? " zoomed" : ""}`}>
+      {isZoomed && (
+        <div className="zoom-toolbar">
+          <button
+            className="snapshot-btn"
+            onClick={handleSnapshot}
+            title="截圖目前畫面"
+          >
+            截圖
+          </button>
+          {onExportCamera && zoomedCamera && (
+            <button
+              className="snapshot-btn"
+              onClick={() => onExportCamera(zoomedCamera as CameraAngle)}
+              title="匯出此鏡頭影片（含時間段標記）"
+            >
+              匯出此鏡頭
+            </button>
+          )}
+        </div>
+      )}
       {availableCameras.map((camera) => {
         const camClips = cameraSegments.get(camera)!;
         const segIdx = Math.min(segmentIndexes.get(camera) ?? 0, camClips.length - 1);
         const currentClip = camClips[Math.max(0, segIdx)];
         if (!currentClip) return null;
         const isMain = camera === activeCamera;
+        const isCamZoomed = zoomedCamera === camera;
         const videoSrc = convertFileSrc(currentClip.filePath);
 
         return (
           <div
             key={camera}
-            className={`cam cam-${camera.replace("_", "-")} ${isMain ? "cam-active" : ""}`}
+            className={`cam cam-${camera.replace("_", "-")} ${isMain ? "cam-active" : ""} ${isCamZoomed ? "cam-zoomed" : ""}`}
             onClick={() => onCameraClick(camera)}
+            onDoubleClick={() => handleCamDoubleClick(camera)}
           >
             <div className="cam-label">
               {CAMERA_LABELS[camera]}

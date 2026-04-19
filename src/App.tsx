@@ -203,6 +203,42 @@ function App() {
     [backupEvent]
   );
 
+  const handleExportSingleCamera = useCallback(
+    async (camera: string) => {
+      if (!selectedEvent) return;
+      const startTime = markIn ?? 0;
+      const endTime = markOut ?? duration;
+      const rangeText = markIn !== null || markOut !== null
+        ? `_${Math.floor(startTime)}s-${Math.floor(endTime)}s`
+        : "";
+
+      const selected = await saveDialog({
+        title: `匯出 ${camera} 鏡頭影片`,
+        defaultPath: `teslacam-${camera}-${selectedEvent.timestamp.replace(/[T:]/g, "-")}${rangeText}.mp4`,
+        filters: [{ name: "MP4", extensions: ["mp4"] }],
+      });
+      if (!selected) return;
+
+      setExporting(true);
+      try {
+        await invoke("export_surround_video", {
+          eventId: selectedEvent.id,
+          outputPath: selected,
+          startTime: markIn !== null ? startTime : null,
+          endTime: markOut !== null ? endTime : null,
+          withTelemetry: true,
+          camera,
+        });
+        alert(`匯出完成：${selected}`);
+      } catch (e) {
+        alert(`匯出失敗：${e}`);
+      } finally {
+        setExporting(false);
+      }
+    },
+    [selectedEvent, markIn, markOut, duration]
+  );
+
   const handleExport = useCallback(
     async (eventId: number) => {
       const event = events.find((e) => e.id === eventId);
@@ -313,6 +349,9 @@ function App() {
               playbackRate={playbackRate}
               onTimeUpdate={setCurrentTime}
               onDurationChange={setDuration}
+              event={selectedEvent}
+              telemetryTrack={telemetryTrack}
+              onExportCamera={handleExportSingleCamera}
             />
             <TelemetryOverlay
               clips={selectedEvent?.clips ?? []}

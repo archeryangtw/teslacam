@@ -1,6 +1,6 @@
 {
   "name": "teslacam-manager",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TeslaCam Manager — 桌面版 Tesla 行車紀錄管理工具",
   "type": "module",
   "scripts": {

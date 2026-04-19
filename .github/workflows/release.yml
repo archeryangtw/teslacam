@@ -51,6 +51,28 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
+      - name: Download static ffmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p src-tauri/bin
+          curl -L -o /tmp/ffmpeg.zip "https://evermeet.cx/ffmpeg/getrelease/zip"
+          unzip -o /tmp/ffmpeg.zip -d src-tauri/bin/
+          chmod +x src-tauri/bin/ffmpeg
+          src-tauri/bin/ffmpeg -version | head -1
+
+      - name: Download static ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri\bin | Out-Null
+          $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
+          $extract = "$env:RUNNER_TEMP\ffmpeg_extract"
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          $exe = Get-ChildItem -Path $extract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+          Copy-Item $exe.FullName -Destination src-tauri\bin\ffmpeg.exe -Force
+          src-tauri\bin\ffmpeg.exe -version | Select-Object -First 1
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -67,8 +89,8 @@ jobs:
             - **Windows**: `.msi` 安裝檔
 
             ### 系統需求
-            - ffmpeg（匯出功能需要）
             - Tesla 韌體 2025.44.25+（SEI 遙測資料）
+            - ffmpeg 已內建於安裝包，無需另外安裝
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}

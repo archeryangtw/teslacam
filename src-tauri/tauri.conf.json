@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "TeslaCam Manager",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "identifier": "com.teslacam.manager",
   "build": {
     "frontendDist": "../dist",
@@ -35,6 +35,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": ["bin/*"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

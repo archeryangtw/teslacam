@@ -8,3 +8,7 @@ videosample/
 .claude/
 teslacam-*.mp4
 .gstack/
+
+# 靜態 ffmpeg（每平台於 CI build 時下載，dev 本機自行放置）
+src-tauri/bin/
+
